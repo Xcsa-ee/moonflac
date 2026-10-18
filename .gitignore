@@ -9,3 +9,8 @@ __pycache__/
 _out/
 tools/corpus/
 _smoke/
+# 工作区根目录的资料，绝不入库
+_tmp_flac/
+_research/
+Claude对话记录-*.md
+*-申报书.md
