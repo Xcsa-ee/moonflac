@@ -16,7 +16,13 @@
 - **残差**：熵编码方法 0/1（Rice 4 位参数 / Rice2 5 位参数）、任意分区序、分区参数与数据交错、**参数转义**（15/31 → 5 位原码位宽）、wasted bits；
 - **声道去相关**：left/side、right/side、mid/side（side 位宽恒为 bps+1，含 32 bps 下的 33 位）；
 - **容错**：帧头级损坏向后扫描重同步；子帧/CRC-16 损坏返回结构化错误（绝不 panic）；`total_samples` 已知时输出精确截断、不足报错；
-- **输出**：planar PCM 接口 + WAV 序列化（8/16/24/32 容器，12/20 位高位对齐左移）。
+- **输出**：planar PCM 接口 + WAV 序列化（8/16/24/32 容器，12/20 位高位对齐左移）；
+- **流式与定位**：`FlacStream` 逐块解码（不一次性物化整条流）；`seek` 按 SEEKTABLE 跳帧，
+  无点表时从流起点线性推进；
+- **元数据读取**：`read_seektable` / `read_vorbis_comment` / `read_picture` /
+  `read_application`（CUESHEET 内容解析为后续增量，块位置已可获取）；
+- **完整性**：STREAMINFO 记录了 MD5 时（位深为 8 的倍数）对解码 PCM 做 MD5 校验
+  （交织小端、bps/8 紧凑打包，与 ffmpeg 写入值交叉验证），不符报 `Md5Mismatch`。
 
 ## 明确不做
 
@@ -28,6 +34,8 @@
 ## 已知限制
 
 - LPC 子帧系数精度字段为 15 时返回 `Unsupported`：ffmpeg 7.1 对该值直接报 `invalid coeff precision`，其语义在本环境无法验证，因此不发布猜测实现。参考编码器不会产出该值（实测 ffmpeg 编码器精度上限为 15，写入字段为 14）。
+- MD5 校验在位深为 8 的倍数时启用；4/12/20 位样本的打包方式未实现，按跳过处理。
+- `FlacStream::seek` 在无 SEEKTABLE 时为线性推进（正确优先）；按帧号扫描的快速路径留作后续增量。
 
 ## 安装
 
@@ -58,15 +66,21 @@ import {
   "LL728/moonflac",
 }
 
+// 整流解码
 let file = @moonflac.decode(data) // raise FlacError
 let wav = @moonflac.wav_encode(
   file.channels,
   file.info.bits_per_sample,
   file.info.sample_rate,
 )
+
+// 流式解码 + 定位
+let s = @moonflac.FlacStream::new(data)
+s.seek(44100) // 跳到第 1 秒
+let block = s.next() // Option：每声道一个块的样本
 ```
 
-`file.channels` 为 planar 布局：`channels[声道][样本]`，样本值在 `file.info.bits_per_sample` 位有符号范围内。
+`file.channels` 为 planar 布局：`channels[声道][样本]`，样本值在 `file.info.bits_per_sample` 位有符号范围内。流式 `next` 同样返回 planar 块。
 
 ## 验证方法（可复现）
 
@@ -83,6 +97,8 @@ python3 tools/gen_corpus.py
 python3 tools/diff_oracle.py --target wasm-gc
 python3 tools/diff_oracle.py --target js
 ```
+
+（库使用示例在包发布后需在全新工程 `moon add` 实跑复验；当前以仓库内 `cmd/main` 为准。）
 
 语料矩阵覆盖：8/16/24/32 bps、1/2/6 声道、四种声道分配、四种采样率码、全部子帧类型与预测阶、分区序扫描、LPC 精度 4/9/15、wasted bits、Rice 转义、Rice2、变长帧号与可变块长、多帧长流，以及魔数错误/空文件/中途截断/CRC-8 损坏/CRC-16 损坏五类负例（负例必须报错）。
 
