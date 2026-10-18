@@ -57,3 +57,9 @@ jobs:
 
       - name: 差分测试（js）
         run: python3 tools/diff_oracle.py --target js
+
+      # 发布形态冒烟：加载 release wasm、走 base64 导出边界解码
+      - name: WASM 导出冒烟
+        run: |
+          moon build --target wasm-gc --release
+          node tools/wasm_smoke.mjs "$RUNNER_TEMP/out.wav"

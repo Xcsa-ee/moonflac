@@ -1,7 +1,17 @@
 import {
   "moonbitlang/core/buffer",
+  "moonbitlang/core/encoding/base64",
 }
 
 import {
   "moonbitlang/core/test",
 } for "wbtest"
+
+options(
+  link: {
+    "wasm-gc": {
+      "exports": [ "decode_flac_base64" ],
+      "use-js-builtin-string": true,
+    },
+  },
+)
