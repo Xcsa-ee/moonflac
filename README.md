@@ -40,7 +40,7 @@
 ## 安装
 
 ```bash
-moon add LL728/moonflac
+moon add Xcsa-ee/moonflac
 ```
 
 ## 用法
@@ -56,7 +56,7 @@ moon run cmd/main -- input.flac output.wav
 ```
 采样率: 44100 Hz, 声道: 1, 位深: 16, 样本: 2000
 已写入: output.wav
-解码失败: LL728/moonflac.FlacError.BadCrc(kind="CRC-16", ...)
+解码失败: Xcsa-ee/moonflac.FlacError.BadCrc(kind="CRC-16", ...)
 ```
 
 ### 作为库使用

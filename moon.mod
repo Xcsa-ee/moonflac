@@ -1,10 +1,10 @@
-name = "LL728/moonflac"
+name = "Xcsa-ee/moonflac"
 
 version = "0.1.0"
 
 readme = "README.md"
 
-repository = "https://github.com/LL728/moonflac"
+repository = "https://github.com/Xcsa-ee/moonflac"
 
 license = "Apache-2.0"
 
