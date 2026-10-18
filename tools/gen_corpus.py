@@ -401,6 +401,16 @@ def build():
         os.remove(raw_path)
         add(tag, data, note="ffmpeg 编码")
 
+    # 带 VORBIS_COMMENT 元数据块的真实文件（解码路径须越过该块）
+    raw_path = os.path.join(CORPUS, "_with_meta.raw")
+    write_raw(raw_path, sig_sine(3000), "s16le")
+    data = ffmpeg_encode(
+        raw_path, os.path.join(CORPUS, "with_meta.flac"),
+        ["-metadata", "title=MoonBit测试", "-metadata", "artist=A=B"],
+        ["-f", "s16le", "-ar", "44100", "-ac", "1", "-i", raw_path])
+    os.remove(raw_path)
+    add("with_meta", data, note="ffmpeg 编码 + VORBIS_COMMENT 块")
+
     # ===== B. 手造帧（覆盖编码器不产出的路径）=====
     # B1. rice 转义（param=15 -> 5 位原码位宽）
     n, bps = 64, 16
@@ -488,6 +498,47 @@ def build():
         make_flac([pack_frame(hdr, sf)], 64, 44100, 1, 16, 64),
         note="method=1 Rice2 5位参数")
 
+    # B8. 全元数据块类型链：APPLICATION/SEEKTABLE/VORBIS_COMMENT/PICTURE/PADDING
+    #     （解码路径须逐块越过；读取内容由单元测试覆盖）
+    app = bytes([0x4D, 0x4F, 0x4F, 0x4E, 1, 2])  # MOON + 数据
+    st_w = W()
+    st_w.w(0, 64); st_w.w(0, 64); st_w.w(0, 16)  # 单占位点
+    seektable = bytes(st_w.out)
+    vc_w = W()
+    def le32(w, v):
+        w.w(v & 0xFF, 8); w.w((v >> 8) & 0xFF, 8)
+        w.w((v >> 16) & 0xFF, 8); w.w((v >> 24) & 0xFF, 8)
+    le32(vc_w, 3)
+    for b in b"fbm":
+        vc_w.w(b, 8)
+    le32(vc_w, 1)
+    le32(vc_w, 11)
+    for b in b"TITLE=cover":
+        vc_w.w(b, 8)
+    vcomment = bytes(vc_w.out)
+    pic_w = W()
+    for v in (3, 9):
+        pic_w.w(v, 32)
+    for b in b"image/png":
+        pic_w.w(b, 8)
+    pic_w.w(0, 32)  # 描述空
+    for v in (1, 1, 24, 0, 3):
+        pic_w.w(v, 32)
+    for b in (0x89, 0x50, 0x4E):
+        pic_w.w(b, 8)
+    picture = bytes(pic_w.out)
+    pad = bytes([0, 0, 0])
+    si_body = streaminfo(64, 44100, 1, 16, 64)
+    hdr = frame_header(64, 44100, 0, 16, 0)
+    frame = pack_frame(hdr, sub_constant(42, 16))
+    out = bytearray(b"fLaC")
+    out += bytes([0x00]) + (34).to_bytes(3, "big") + si_body
+    for last, typ, payload in ((0, 2, app), (0, 3, seektable), (0, 4, vcomment),
+                               (0, 6, picture), (1, 1, pad)):
+        out += bytes([(last << 7) | typ]) + len(payload).to_bytes(3, "big") + payload
+    out += frame
+    add("hand_allblocks", bytes(out), note="手造：全部元数据块类型链")
+
     # ===== C. 负例（必须解码失败）=====
     base = open(os.path.join(CORPUS, "hand_bs64.flac"), "rb").read()
     add("neg_notflac", b"RIFF\x00\x00\x00\x00WAVEjunk", kind="negative",
@@ -505,6 +556,11 @@ def build():
     bad2 = bytearray(open(os.path.join(CORPUS, "hand_utf8_2byte.flac"), "rb").read())
     bad2[42 + 6] ^= 0x0F  # 帧头内（帧从 46 字节起；头部第 6 字节）
     add("neg_crc8", bytes(bad2), kind="negative", note="帧头字节翻转")
+    # MD5 篡改：把 STREAMINFO 的 MD5 改一位 -> 解码尾部校验必须报错
+    md5_bad = bytearray(open(os.path.join(CORPUS, "sine16_2000.flac"), "rb").read())
+    assert md5_bad[26:42] != bytes(16), "该用例应带非零 MD5"
+    md5_bad[41] ^= 0xFF
+    add("neg_md5", bytes(md5_bad), kind="negative", note="STREAMINFO MD5 篡改")
 
     manifest = os.path.join(CORPUS, "manifest.json")
     with open(manifest, "w", encoding="utf-8") as f:

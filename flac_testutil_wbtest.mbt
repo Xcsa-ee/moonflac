@@ -34,7 +34,7 @@ fn TestBW::w(self : TestBW, value : Int32, bits : Int32) -> Unit {
 
 ///|
 fn TestBW::w64(self : TestBW, value : Int64, bits : Int32) -> Unit {
-  guard! bits >= 0 && bits <= 40
+  guard! bits >= 0 && bits <= 64
   let mut i = bits - 1
   while i >= 0 {
     self.w((((value >> i) & 1L) != 0L).to_int(), 1)
@@ -56,13 +56,14 @@ fn TestBW::bytes(self : TestBW) -> Bytes {
 }
 
 ///|
-/// STREAMINFO 块载荷（34 字节）。
+/// STREAMINFO 块载荷（34 字节）；md5 为 16 字节（全零 = 未记录）。
 fn tb_streaminfo(
   block_size : Int32,
   rate : Int32,
   ch : Int32,
   bps : Int32,
   total : Int64,
+  md5 : Bytes,
 ) -> Bytes {
   let w = TestBW::new()
   w.w(block_size, 16)
@@ -76,8 +77,9 @@ fn tb_streaminfo(
   w.w(((total >> 32) & 0xFL).to_int(), 4)
   w.w(((total >> 16) & 0xFFFFL).to_int(), 16)
   w.w((total & 0xFFFFL).to_int(), 16)
-  for _ in 0..<16 {
-    w.w(0, 8) // MD5 未知
+  for i in 0..<16 {
+    let b = if i < md5.length() { md5.unsafe_get(i).to_int() } else { 0 }
+    w.w(b, 8)
   }
   w.bytes()
 }
@@ -97,7 +99,7 @@ fn tb_flac_header(
   w.w(0x4C, 8)
   w.w(0x61, 8)
   w.w(0x43, 8)
-  let info = tb_streaminfo(block_size, rate, ch, bps, total)
+  let info = tb_streaminfo(block_size, rate, ch, bps, total, zeromd5())
   // STREAMINFO 块头：last 标志视 extra_blocks
   w.w(if extra_blocks { 0 } else { 1 }, 1)
   w.w(0, 7)
@@ -438,4 +440,66 @@ fn tb_bytes(vals : Array[Int32]) -> Bytes {
     w.w(v, 8)
   }
   w.bytes()
+}
+
+///|
+/// 16 字节全零 MD5（= STREAMINFO 未记录）。
+fn zeromd5() -> Bytes {
+  tb_bytes([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+}
+
+///|
+/// magic + STREAMINFO（可带 MD5）+ 任意附加块序列（最后一块置 last 标志）。
+fn tb_flac_blocks(
+  block_size : Int32,
+  rate : Int32,
+  ch : Int32,
+  bps : Int32,
+  total : Int64,
+  md5 : Bytes,
+  extras : Array[(Int32, Bytes)],
+) -> Bytes {
+  let w = TestBW::new()
+  w.w(0x66, 8)
+  w.w(0x4C, 8)
+  w.w(0x61, 8)
+  w.w(0x43, 8)
+  let info = tb_streaminfo(block_size, rate, ch, bps, total, md5)
+  w.w(if extras.length() == 0 { 1 } else { 0 }, 1)
+  w.w(0, 7)
+  w.w(info.length(), 24)
+  for i in 0..<info.length() {
+    w.w(info.unsafe_get(i).to_int(), 8)
+  }
+  for i in 0..<extras.length() {
+    let (typ, payload) = extras[i]
+    w.w(if i == extras.length() - 1 { 1 } else { 0 }, 1)
+    w.w(typ, 7)
+    w.w(payload.length(), 24)
+    for k in 0..<payload.length() {
+      w.w(payload.unsafe_get(k).to_int(), 8)
+    }
+  }
+  w.bytes()
+}
+
+///|
+/// 写小端 u32（VORBIS_COMMENT 的长度前缀用）。
+fn tb_le32(w : TestBW, v : Int32) -> Unit {
+  w.w(v & 0xFF, 8)
+  w.w((v >> 8) & 0xFF, 8)
+  w.w((v >> 16) & 0xFF, 8)
+  w.w((v >> 24) & 0xFF, 8)
+}
+
+///|
+/// 写大端 u32（PICTURE 等；要求 v < 2^31）。
+fn tb_be32(w : TestBW, v : Int32) -> Unit {
+  w.w64(Int64::from_int(v), 32)
+}
+
+///|
+/// 写大端 u64（SEEKTABLE 用；-1L 即占位点的全 1 样本号）。
+fn tb_be64(w : TestBW, v : Int64) -> Unit {
+  w.w64(v, 64)
 }
