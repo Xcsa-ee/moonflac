@@ -63,7 +63,7 @@ moon run cmd/main -- input.flac output.wav
 
 ```moonbit
 import {
-  "LL728/moonflac",
+  "Xcsa-ee/moonflac",
 }
 
 // 整流解码
@@ -98,7 +98,7 @@ python3 tools/diff_oracle.py --target wasm-gc
 python3 tools/diff_oracle.py --target js
 ```
 
-（库使用示例在包发布后需在全新工程 `moon add` 实跑复验；当前以仓库内 `cmd/main` 为准。）
+（库使用示例已于 2026-10-18 在全新工程 `moon add Xcsa-ee/moonflac` 实拉 0.1.0 复验通过：整流解码、WAV 写出与流式 seek/next 均按上文运行。）
 
 语料矩阵覆盖：8/16/24/32 bps、1/2/6 声道、四种声道分配、四种采样率码、全部子帧类型与预测阶、分区序扫描、LPC 精度 4/9/15、wasted bits、Rice 转义、Rice2、变长帧号与可变块长、多帧长流，以及魔数错误/空文件/中途截断/CRC-8 损坏/CRC-16 损坏五类负例（负例必须报错）。
 
