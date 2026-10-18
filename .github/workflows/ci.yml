@@ -38,9 +38,22 @@ jobs:
       - name: 构建
         run: moon build --target wasm-gc
 
-      - name: 测试
+      - name: 测试（wasm-gc 后端）
         run: moon test --target wasm-gc
 
       # 解码逻辑不依赖后端特性，js 后端应解出同样的结果
       - name: 测试（js 后端）
         run: moon test --target js
+
+      # ffmpeg 差分：本解码器与参考解码器逐样本比对（语料现场生成）
+      - name: 安装 ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: 生成差分语料
+        run: python3 tools/gen_corpus.py
+
+      - name: 差分测试（wasm-gc）
+        run: python3 tools/diff_oracle.py --target wasm-gc
+
+      - name: 差分测试（js）
+        run: python3 tools/diff_oracle.py --target js
