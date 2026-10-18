@@ -22,4 +22,6 @@ pub suberror FlacError {
   BadResidual(reason~ : String)
   /// 合法但当前版本尚未实现。
   Unsupported(what~ : String)
+  /// STREAMINFO 记录的 MD5 与解码 PCM 不符（数据已损坏）。
+  Md5Mismatch(expected~ : String, actual~ : String)
 }
