@@ -202,3 +202,234 @@ test "APPLICATION：标识与数据" {
     _ => abort("错误类型不对")
   }
 }
+
+///|
+/// 写 128 字节 ASCII（不足右补 0x00）。
+fn tb_ascii128(w : TestBW, s : String) -> Unit {
+  let bytes = @utf8.encode(s)
+  for i in 0..<128 {
+    let b = if i < bytes.length() { bytes.unsafe_get(i).to_int() } else { 0 }
+    w.w(b, 8)
+  }
+}
+
+///|
+/// 写 12 字节 ISRC（不足右补 0x00）。
+fn tb_ascii12(w : TestBW, s : String) -> Unit {
+  let bytes = @utf8.encode(s)
+  for i in 0..<12 {
+    let b = if i < bytes.length() { bytes.unsafe_get(i).to_int() } else { 0 }
+    w.w(b, 8)
+  }
+}
+
+///|
+/// 合法 CUESHEET 载荷：CD-DA，1 个普通轨道（2 个索引点）+ 1 个 lead-out。
+fn tb_cuesheet_payload() -> Bytes {
+  let w = TestBW::new()
+  tb_ascii128(w, "1234567890123")
+  tb_be64(w, 88200L) // lead-in
+  w.w(1, 1) // is_cd
+  w.w(0, 7) // 7 位保留
+  for _ in 0..<258 {
+    w.w(0, 8) // 258 字节保留
+  }
+  w.w(2, 8) // 轨道数
+  // —— 轨道 1：普通音频，2 个索引点 ——
+  tb_be64(w, 88200L) // 轨道偏移
+  w.w(1, 8) // 轨道号
+  tb_ascii12(w, "ABC123456789")
+  w.w(0, 1) // 音频
+  w.w(0, 1) // 无预加重
+  w.w(0, 6) // 6 位保留
+  for _ in 0..<13 {
+    w.w(0, 8) // 13 字节保留
+  }
+  w.w(2, 8) // 索引点数
+  // 索引 0
+  tb_be64(w, 0L)
+  w.w(1, 8)
+  for _ in 0..<3 {
+    w.w(0, 8) // 3 字节保留
+  }
+  // 索引 1
+  tb_be64(w, 588L)
+  w.w(2, 8)
+  for _ in 0..<3 {
+    w.w(0, 8)
+  }
+  // —— 轨道 2：lead-out，无索引点 ——
+  tb_be64(w, 441000L)
+  w.w(170, 8)
+  tb_ascii12(w, "")
+  w.w(0, 1)
+  w.w(0, 1)
+  w.w(0, 6)
+  for _ in 0..<13 {
+    w.w(0, 8)
+  }
+  w.w(0, 8) // 索引点数
+  w.bytes()
+}
+
+///|
+test "CUESHEET：CD-DA 全字段解析" {
+  let payload = tb_cuesheet_payload()
+  let block = { block_type: 5, offset: 0, length: payload.length(), }
+  let cs = read_cuesheet(payload, block)
+  @test.assert_eq(cs.media_catalog_number, "1234567890123")
+  @test.assert_eq(cs.lead_in_samples, 88200L)
+  @test.assert_eq(cs.is_cd, true)
+  @test.assert_eq(cs.tracks.length(), 2)
+  // 轨道 1
+  @test.assert_eq(cs.tracks[0].offset, 88200L)
+  @test.assert_eq(cs.tracks[0].track_number, 1)
+  @test.assert_eq(cs.tracks[0].isrc, "ABC123456789")
+  @test.assert_eq(cs.tracks[0].is_non_audio, false)
+  @test.assert_eq(cs.tracks[0].pre_emphasis, false)
+  @test.assert_eq(cs.tracks[0].indexes.length(), 2)
+  @test.assert_eq(cs.tracks[0].indexes[0].offset, 0L)
+  @test.assert_eq(cs.tracks[0].indexes[0].index_number, 1)
+  @test.assert_eq(cs.tracks[0].indexes[1].offset, 588L)
+  @test.assert_eq(cs.tracks[0].indexes[1].index_number, 2)
+  // lead-out 轨道
+  @test.assert_eq(cs.tracks[1].offset, 441000L)
+  @test.assert_eq(cs.tracks[1].track_number, 170)
+  @test.assert_eq(cs.tracks[1].isrc, "")
+  @test.assert_eq(cs.tracks[1].indexes.length(), 0)
+}
+
+///|
+test "CUESHEET：超过 64 字节的媒体目录号（定长 128 的判别边界）" {
+  // 13 字节目录号补零到 128 后，取 64 或 128 字节结果相同，无法区分；
+  // 这里用 100 字符目录号——若字段宽度写成 64 会被截断成半截。
+  let mut catalog = ""
+  for _ in 0..<100 {
+    catalog = catalog + "C"
+  }
+  let w = TestBW::new()
+  tb_ascii128(w, catalog)
+  tb_be64(w, 0L)
+  w.w(0, 1)
+  w.w(0, 7)
+  for _ in 0..<258 {
+    w.w(0, 8)
+  }
+  w.w(1, 8) // 1 个轨道（lead-out）
+  tb_be64(w, 0L)
+  w.w(255, 8)
+  tb_ascii12(w, "")
+  w.w(0, 1)
+  w.w(0, 1)
+  w.w(0, 6)
+  for _ in 0..<13 {
+    w.w(0, 8)
+  }
+  w.w(0, 8)
+  let payload = w.bytes()
+  let block = { block_type: 5, offset: 0, length: payload.length(), }
+  let cs = read_cuesheet(payload, block)
+  @test.assert_eq(cs.media_catalog_number, catalog)
+  @test.assert_eq(cs.media_catalog_number.length(), 100)
+}
+
+///|
+test "CUESHEET：保留位非零 / 轨道数 0 / 截断" {
+  // 258 字节保留区被写脏
+  let w = TestBW::new()
+  tb_ascii128(w, "")
+  tb_be64(w, 0L)
+  w.w(0, 1)
+  w.w(0, 7)
+  for i in 0..<258 {
+    w.w(if i == 100 { 0xFF } else { 0 }, 8)
+  }
+  w.w(1, 8)
+  let p = w.bytes()
+  let b = { block_type: 5, offset: 0, length: p.length(), }
+  try {
+    let _ = read_cuesheet(p, b)
+    abort("保留位非零应 BadMetadata")
+  } catch {
+    FlacError::BadMetadata(..) => ()
+    _ => abort("错误类型不对")
+  }
+  // 轨道数 0
+  let w2 = TestBW::new()
+  tb_ascii128(w2, "")
+  tb_be64(w2, 0L)
+  w2.w(0, 1)
+  w2.w(0, 7)
+  for _ in 0..<258 {
+    w2.w(0, 8)
+  }
+  w2.w(0, 8) // track_count = 0
+  let p2 = w2.bytes()
+  let b2 = { block_type: 5, offset: 0, length: p2.length(), }
+  try {
+    let _ = read_cuesheet(p2, b2)
+    abort("轨道数 0 应 BadMetadata")
+  } catch {
+    FlacError::BadMetadata(..) => ()
+    _ => abort("错误类型不对")
+  }
+  // 截断：轨道头不完整
+  let payload = tb_cuesheet_payload()
+  let b3 = { block_type: 5, offset: 0, length: payload.length() - 10, }
+  try {
+    let _ = read_cuesheet(payload, b3)
+    abort("截断应报错")
+  } catch {
+    FlacError::Truncated(..) | FlacError::BadMetadata(..) => ()
+    _ => abort("错误类型不对")
+  }
+}
+
+///|
+test "CUESHEET：xiph 官方测试文件真实载荷（input-SCPAP.flac，540 字节）" {
+  // 载荷提取自 xiph/flac 仓库 test/flac-to-flac-metadata-test-files/
+  // input-SCPAP.flac 的 CUESHEET 块；期望值由独立 Python 解析得出。
+  let payload = tb_bytes([
+    49, 50, 51, 52, 53, 54, 55, 56, 57, 48, 49, 50, 51, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 1, 88, 136, 128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0,
+    0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 76, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    11, 124, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 22, 248,
+    170, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0,
+  ])
+  let block = { block_type: 5, offset: 0, length: payload.length(), }
+  let cs = read_cuesheet(payload, block)
+  @test.assert_eq(cs.media_catalog_number, "1234567890123")
+  @test.assert_eq(cs.lead_in_samples, 88200L)
+  @test.assert_eq(cs.is_cd, true)
+  @test.assert_eq(cs.tracks.length(), 3)
+  @test.assert_eq(cs.tracks[0].track_number, 1)
+  @test.assert_eq(cs.tracks[0].offset, 0L)
+  @test.assert_eq(cs.tracks[0].is_non_audio, false)
+  @test.assert_eq(cs.tracks[0].pre_emphasis, false)
+  @test.assert_eq(cs.tracks[0].indexes.length(), 2)
+  @test.assert_eq(cs.tracks[0].indexes[1].offset, 588L)
+  @test.assert_eq(cs.tracks[0].indexes[1].index_number, 2)
+  @test.assert_eq(cs.tracks[1].track_number, 2)
+  @test.assert_eq(cs.tracks[1].offset, 2940L)
+  @test.assert_eq(cs.tracks[1].indexes.length(), 1)
+  @test.assert_eq(cs.tracks[2].track_number, 170)
+  @test.assert_eq(cs.tracks[2].offset, 5880L)
+  @test.assert_eq(cs.tracks[2].indexes.length(), 0)
+}

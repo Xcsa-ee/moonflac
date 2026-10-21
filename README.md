@@ -20,7 +20,10 @@
 - **流式与定位**：`FlacStream` 逐块解码（不一次性物化整条流）；`seek` 按 SEEKTABLE 跳帧，
   无点表时从流起点线性推进；
 - **元数据读取**：`read_seektable` / `read_vorbis_comment` / `read_picture` /
-  `read_application`（CUESHEET 内容解析为后续增量，块位置已可获取）；
+  `read_application` / `read_cuesheet`（CUESHEET 全字段：目录号、ISRC、轨道、索引点，
+  保留位按规范强制校验为零）；
+- **增量输入**：`FlacFeeder` 支持按任意块大小边喂边解（`feed`/`next`/`finish`），
+  数据不足时等待更多输入而不误报错误；
 - **完整性**：STREAMINFO 记录了 MD5 时对解码 PCM 做 MD5 校验（交织小端、每样本符号扩展到
   `ceil(bps/8)` 字节，符合 RFC 9639 §8.4，覆盖 4–32 全位深；8/16/24/32 位的打包方式此前已与
   ffmpeg 写入值交叉验证，非 8 倍数位深按规范原文实现），不符报 `Md5Mismatch`。
