@@ -100,6 +100,15 @@ def oracle_ints(flac_path, bps):
     return [int(round(v * scale)) for v in vals], ""
 
 
+def streaminfo_bps(flac_path):
+    """从 STREAMINFO 读真实 bits_per_sample（WAV 容器宽度不可靠）。"""
+    d = open(flac_path, "rb").read(4 + 4 + 34)
+    if d[:4] != b"fLaC" or (d[4] & 0x7F) != 0:
+        return None
+    b2, b3 = d[8 + 10 + 2], d[8 + 10 + 3]
+    return (((b2 & 0x1) << 4) | (b3 >> 4)) + 1
+
+
 def main():
     target = "wasm-gc"
     filt = None
@@ -144,18 +153,19 @@ def main():
             fails.append((name, "未产出 WAV"))
             continue
 
-        # 从流信息推 bps：WAV fmt 里的 bits 是容器位宽，真实 bps 由 oracle 推
-        # 这里从 ffmpeg 元数据拿：直接比较样本个数 + 用容器位宽试还原。
-        # 先取 oracle（按容器位宽解释可能不等于 bps，比如 12 位装 16 容器——
-        # 本语料没有该组合，正例 bps 都是 8/16/24/32 的容器同宽）。
+        # WAV 容器位宽可能大于真实 bps（如 12 位装 16 位容器、样本按高位
+        # 对齐左移），真实 bps 从 STREAMINFO 读；比较前把容器值右移回 bps。
         bits, ch, rate, ours = read_wav(wav)
-        # oracle
-        raw = subprocess.run(
-            [FFMPEG, "-hide_banner", "-i", path, "-f", "null", "-"],
-            capture_output=True, text=True, encoding="utf-8",
-            errors="replace")
-        _ = raw
-        bps = bits  # 本语料中容器位宽 == bps
+        bps = streaminfo_bps(path)
+        if bps is None:
+            fails.append((name, "STREAMINFO 解析失败"))
+            continue
+        shift = bits - bps
+        if shift < 0:
+            fails.append((name, f"容器位宽 {bits} < bps {bps}"))
+            continue
+        if shift > 0:
+            ours = [[v >> shift for v in chn] for chn in ours]
         oints, err = oracle_ints(path, bps)
         if err:
             fails.append((name, err))

@@ -316,6 +316,48 @@ def write_raw(path, samples, fmt):
     open(path, "wb").write(struct.pack(code % len(samples), *samples))
 
 
+def find_flac():
+    """libFLAC 官方 flac CLI（用于编码非 8 倍数位深——ffmpeg 不支持）。"""
+    env = os.environ.get("FLAC_BIN")
+    if env and os.path.exists(env):
+        return env
+    for base in (ROOT, os.path.dirname(ROOT)):
+        local = os.path.join(
+            base, "_ffmpeg", "_dl", "flac-win", "flac-1.5.0-win", "Win64",
+            "flac.exe")
+        if os.path.exists(local):
+            return local
+    return "flac"  # CI / Linux
+
+
+def write_wav_ext(path, samples, valid_bits):
+    """写 WAVE_FORMAT_EXTENSIBLE 单声道 WAV（valid_bits 可为 4..32 非整字节）。"""
+    container = (valid_bits + 7) // 8
+    shift = container * 8 - valid_bits
+    data = bytearray()
+    for v in samples:
+        # 样本按高位对齐放进容器（WAV 约定，与我们的 wav_encode 一致）
+        data += ((v << shift) & ((1 << (container * 8)) - 1)).to_bytes(
+            container, "little", signed=False)
+    sub = bytes.fromhex("0100000000001000800000aa00389b71")
+    fmt = struct.pack("<HHIIHH", 0xFFFE, 1, 44100, 44100 * container,
+                      container, container * 8)
+    fmt += struct.pack("<HHI", 22, valid_bits, 0) + sub
+    hdr = b"RIFF" + struct.pack("<I", 4 + 8 + len(fmt) + 8 + len(data)) + \
+        b"WAVE" + b"fmt " + struct.pack("<I", len(fmt)) + fmt + \
+        b"data" + struct.pack("<I", len(data))
+    open(path, "wb").write(hdr + data)
+
+
+def flac_encode_wav(flac_bin, wav_path, flac_path):
+    r = subprocess.run([flac_bin, "-s", "-f", "-o", flac_path, wav_path],
+                       capture_output=True, text=True, encoding="utf-8",
+                       errors="replace")
+    if r.returncode != 0:
+        raise RuntimeError(f"flac encode failed: {r.stderr.strip()}")
+    return open(flac_path, "rb").read()
+
+
 # ---------------------------------------------------------------- 用例集
 
 def build():
@@ -343,7 +385,7 @@ def build():
     # 采样率扫描（帧头采样率码表）
     for rate in (8000, 88200, 192000, 48000):
         enc.append((f"sine16_r{rate}", sig_sine(3000, rate=rate), rate, 1, 16, [], "s16le"))
-    # 声道数
+    # 声道数（原有 2/6 用例保留）
     for ch in (2, 6):
         sig = []
         for c in range(ch):
@@ -353,6 +395,14 @@ def build():
             for i in range(3000):
                 inter[i * ch + c] = sig[c * 3000 + i]
         enc.append((f"stereo_ch{ch}_16", inter, 44100, ch, 16, [], "s16le"))
+    # 补齐声明范围 1–8 中的其余声道数
+    for ch in (3, 4, 5, 7, 8):
+        inter = []
+        for i in range(3000):
+            for c in range(ch):
+                inter.append(int(8000 * __import__("math").sin(
+                    2 * 3.141592653589793 * (220.0 * (c + 1)) * i / 44100)))
+        enc.append((f"channels_ch{ch}_16", inter, 44100, ch, 16, [], "s16le"))
     # 立体声去相关模式
     l = sig_sine(4000, freq=440.0)
     r = sig_sine(4000, freq=1337.0, amp=20000)
@@ -407,6 +457,22 @@ def build():
                              extra, args_in)
         os.remove(raw_path)
         add(tag, data, note="ffmpeg 编码")
+
+    # ===== A2. 非 8 倍数位深：libFLAC 编码（ffmpeg 会把 12/20 位静默退回 24 位）=====
+    flac_bin = find_flac()
+    print("flac:", flac_bin)
+    for bps in (12, 20):
+        for tag_sig, sig in (
+            ("sine", sig_sine(3000, bps=bps, freq=523.25)),
+            ("noise", sig_noise(3000, bps=bps, seed=bps)),
+        ):
+            tag = f"{tag_sig}_bps{bps}"
+            wav_path = os.path.join(CORPUS, f"_{tag}.wav")
+            write_wav_ext(wav_path, sig, bps)
+            data = flac_encode_wav(flac_bin, wav_path,
+                                   os.path.join(CORPUS, tag + ".flac"))
+            os.remove(wav_path)
+            add(tag, data, note=f"libFLAC 编码 {bps} 位")
 
     # 带 VORBIS_COMMENT 元数据块的真实文件（解码路径须越过该块）
     raw_path = os.path.join(CORPUS, "_with_meta.raw")
@@ -505,7 +571,19 @@ def build():
         make_flac([pack_frame(hdr, sf)], 64, 44100, 1, 16, 64),
         note="method=1 Rice2 5位参数")
 
-    # B8. 全元数据块类型链：APPLICATION/SEEKTABLE/VORBIS_COMMENT/PICTURE/PADDING    #     （解码路径须逐块越过；读取内容由单元测试覆盖）
+    # B7.5. 4 位深（无任何参考编码器支持；纯手造 constant/verbatim）
+    s4 = [((i * 5 + 3) % 16) - 8 for i in range(64)]  # -8..7
+    hdr = frame_header(64, 44100, 0, 4, 0)
+    add("hand_bps4_verbatim",
+        make_flac([pack_frame(hdr, sub_verbatim(s4, 4))], 64, 44100, 1, 4, 64),
+        note="4 位手造 verbatim")
+    hdr4 = frame_header(64, 44100, 0, 4, 1)
+    add("hand_bps4_constant",
+        make_flac([pack_frame(hdr, sub_constant(-3, 4))], 64, 44100, 1, 4, 64),
+        note="4 位手造 constant")
+
+    # B8. 全元数据块类型链：APPLICATION/SEEKTABLE/VORBIS_COMMENT/PICTURE/PADDING
+    #     （解码路径须逐块越过；读取内容由单元测试覆盖）
     app = bytes([0x4D, 0x4F, 0x4F, 0x4E, 1, 2])  # MOON + 数据
     st_w = W()
     st_w.w(0, 64); st_w.w(0, 64); st_w.w(0, 16)  # 单占位点
