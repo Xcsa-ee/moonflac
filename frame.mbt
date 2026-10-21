@@ -81,12 +81,12 @@ fn read_coded_number(br : BitReader) -> Int64 raise FlacError {
   let mut value = Int64::from_int(b0 & ((1 << (7 - k)) - 1))
   for _ in 1..<k {
     let b = br.read_bits64(8).to_int()
+    br.check()
     if (b & 0xC0) != 0x80 {
       raise BadFrameHeader(reason="变长帧号续字节非法")
     }
     value = (value << 6) | Int64::from_int(b & 0x3F)
   }
-  br.check()
   value
 }
 
@@ -117,30 +117,42 @@ fn parse_frame_header(
   }
   let start_byte = br.pos >> 3
   let sync = br.read_bits64(14).to_int()
+  // 每读完一个字段就先 check 越界，避免"数据不足"被后续字段校验
+  // 误报成 BadFrameHeader（增量解码依赖 Truncated 与之区分）。
+  br.check()
   if sync != 0x3FFE {
     raise BadFrameHeader(reason="帧同步码错误")
   }
-  if br.read_bit() != 0 {
+  let reserved = br.read_bit()
+  br.check()
+  if reserved != 0 {
     raise BadFrameHeader(reason="帧头保留位非零")
   }
   let _ = br.read_bit() // 阻塞策略位：M1 不做按样本号校验，读过即可
+  br.check()
   let bs_code = br.read_bits64(4).to_int()
+  br.check()
   if bs_code == 0 {
     raise BadFrameHeader(reason="块长码 0 为保留值")
   }
   let sr_code = br.read_bits64(4).to_int()
+  br.check()
   if sr_code == 15 {
     raise BadFrameHeader(reason="采样率码 15 为保留值")
   }
   let ch_code = br.read_bits64(4).to_int()
+  br.check()
   if ch_code > 10 {
     raise BadFrameHeader(reason="声道分配码超过 10")
   }
   let ss_code = br.read_bits64(3).to_int()
+  br.check()
   if ss_code == 3 {
     raise BadFrameHeader(reason="位深码 3 为保留值")
   }
-  if br.read_bit() != 0 {
+  let last_reserved = br.read_bit()
+  br.check()
+  if last_reserved != 0 {
     raise BadFrameHeader(reason="帧头末保留位非零")
   }
   let _ = read_coded_number(br) // 帧号/样本号：读过即校验其编码合法性
@@ -159,6 +171,7 @@ fn parse_frame_header(
   } else if bs_code == 7 {
     block_size = br.read_bits64(16).to_int() + 1
   }
+  br.check()
   if block_size < 1 || block_size > 65536 {
     raise BadFrameHeader(reason="块长超出合法范围")
   }
@@ -177,10 +190,10 @@ fn parse_frame_header(
   } else if sr_code == 14 {
     sample_rate = br.read_bits64(16).to_int() * 10
   }
+  br.check()
   if sample_rate < 1 {
     raise BadFrameHeader(reason="采样率为 0")
   }
-  br.check()
   // 此处读取器落在字节边界：帧头全部字段都是字节数的整数倍
   if !br.is_aligned() {
     raise BadFrameHeader(reason="帧头结束未字节对齐")

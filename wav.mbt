@@ -1,7 +1,9 @@
 // wav.mbt
 //
 // PCM WAV（RIFF）序列化。容器位宽取 8/16/24/32 中不小于 bps 的最小值，
-// 12/20 位样本按高位对齐左移（WAV PCM 只有 8 的倍数位宽，这是无损表示）。
+// 非 8 倍数位深（4/12/20 等）的样本一律按高位对齐左移
+// （WAV PCM 只有 8 的倍数位宽，左对齐是无损表示，与 ffmpeg 解出的
+// 32 位左对齐值同口径）。
 // 纯函数，不涉及文件 I/O，CLI 与后续 wasm 示例共用。
 
 ///|
@@ -57,8 +59,9 @@ pub fn wav_encode(
     for c in 0..<nch {
       let v = channels[c][f]
       if container == 8 {
-        // 8 位 WAV 无符号：以 128 为中点
-        buf.write_byte(((v + 128) & 0xFF).to_byte())
+        // 8 位 WAV 无符号：以 128 为中点。bps < 8（4..7）时同样要高位对齐左移，
+        // 否则样本被当成满量程 8 位，整体差 2^(8-bps) 倍。
+        buf.write_byte((((v << shift) + 128) & 0xFF).to_byte())
       } else {
         let scaled = v << shift
         for i in 0..<(container / 8) {

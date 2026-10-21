@@ -157,6 +157,20 @@ test "WAV：头部字段与样本字节" {
   @test.assert_eq(wav8.unsafe_get(44).to_int(), 128)
   @test.assert_eq(wav8.unsafe_get(45).to_int(), 129)
   @test.assert_eq(wav8.unsafe_get(46).to_int(), 127)
+  // 4 位：8 位容器内必须高位对齐左移 4 位（否则满量程差 16 倍）。
+  // 样本 0/1/-1/-8/7 -> 0/16/-16/-128/112 加偏置 128
+  let wav4 = wav_encode([[0, 1, -1, -8, 7]], 4, 8000)
+  @test.assert_eq(wav4.unsafe_get(44).to_int(), 128)
+  @test.assert_eq(wav4.unsafe_get(45).to_int(), 144)
+  @test.assert_eq(wav4.unsafe_get(46).to_int(), 112)
+  @test.assert_eq(wav4.unsafe_get(47).to_int(), 0)
+  @test.assert_eq(wav4.unsafe_get(48).to_int(), 240)
+  // 12 位：16 位容器左移 4 位（-2048 -> 0x8000）
+  let wav12 = wav_encode([[-2048, 2047]], 12, 8000)
+  @test.assert_eq(wav12.unsafe_get(44).to_int(), 0x00)
+  @test.assert_eq(wav12.unsafe_get(45).to_int(), 0x80)
+  @test.assert_eq(wav12.unsafe_get(46).to_int(), 0xF0)
+  @test.assert_eq(wav12.unsafe_get(47).to_int(), 0x7F)
   // 24 位容器 3 字节小端
   let wav24 = wav_encode([[0x123456]], 24, 44100)
   @test.assert_eq(wav24.unsafe_get(34).to_int(), 24)

@@ -121,7 +121,14 @@ BS_CODE = {192: 1, 576: 2, 1152: 3, 2304: 4, 4608: 5, 256: 8, 512: 9,
            1024: 10, 2048: 11, 4096: 12, 8192: 13, 16384: 14, 32768: 15}
 SR_CODE = {88200: 1, 176400: 2, 192000: 3, 8000: 4, 16000: 5, 22050: 6,
            24000: 7, 32000: 8, 44100: 9, 48000: 10, 96000: 11}
+# 位深码 0 表示「位数只在 STREAMINFO 里」——非 8 倍数位深（4..7）只能走这条，
+# 表码里没有 4 bit。frame_bps_code 负责这个回退。
 BPS_CODE = {8: 1, 12: 2, 16: 4, 20: 5, 24: 6, 32: 7}
+
+
+def frame_bps_code(bps):
+    """帧头里的位深码；4..7 无表码，返回 0（按 STREAMINFO 取）。"""
+    return BPS_CODE.get(bps, 0)
 
 
 def frame_header(block_size, rate, ch_assign, bps, number, variable=False,
@@ -147,7 +154,7 @@ def frame_header(block_size, rate, ch_assign, bps, number, variable=False,
     else:
         w.w(0, 4)
     w.w(ch_assign, 4)
-    w.w(BPS_CODE[bps], 3)
+    w.w(frame_bps_code(bps), 3)
     w.w(0, 1)
     for b in utf8num(number):
         w.w(b, 8)
@@ -498,8 +505,7 @@ def build():
         make_flac([pack_frame(hdr, sf)], 64, 44100, 1, 16, 64),
         note="method=1 Rice2 5位参数")
 
-    # B8. 全元数据块类型链：APPLICATION/SEEKTABLE/VORBIS_COMMENT/PICTURE/PADDING
-    #     （解码路径须逐块越过；读取内容由单元测试覆盖）
+    # B8. 全元数据块类型链：APPLICATION/SEEKTABLE/VORBIS_COMMENT/PICTURE/PADDING    #     （解码路径须逐块越过；读取内容由单元测试覆盖）
     app = bytes([0x4D, 0x4F, 0x4F, 0x4E, 1, 2])  # MOON + 数据
     st_w = W()
     st_w.w(0, 64); st_w.w(0, 64); st_w.w(0, 16)  # 单占位点
