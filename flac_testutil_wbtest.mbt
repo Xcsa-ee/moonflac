@@ -175,6 +175,8 @@ fn tb_frame_header(
   }
   w.w(sr_code, 4)
   w.w(ch_assign, 4)
+  // 位深码：0 = 取自 STREAMINFO（非 8 倍数位深如 4/14/20 之外的
+  // 其他值只能走这条）；8/12/16/20/24/32 有专属码。
   w.w(
     match bps {
       8 => 1
@@ -182,7 +184,8 @@ fn tb_frame_header(
       16 => 4
       20 => 5
       24 => 6
-      _ => 7
+      32 => 7
+      _ => 0
     },
     3,
   )

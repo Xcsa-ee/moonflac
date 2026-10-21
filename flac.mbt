@@ -175,9 +175,9 @@ fn hex_string(bytes : Bytes) -> String {
 }
 
 ///|
-/// 若 STREAMINFO 写了 MD5（非全零）则校验：对交织小端、bps/8 字节紧凑打包
-/// 的 PCM 求 MD5（约定已与 ffmpeg 写入值在 16/24/32 位上交叉验证）。
-/// 位深非 8 倍数时按规范无法用该打包方式，跳过校验（README 注明）。
+/// 若 STREAMINFO 写了 MD5（非全零）则校验：交织小端、每样本符号扩展到
+/// ceil(bps/8) 字节后紧凑打包（RFC 9639 §8.4，含 4/12/20 位等非 8 倍数
+/// 位深；8/16/24/32 位的打包方式此前已与 ffmpeg 写入值交叉验证）。
 fn verify_md5(
   info : StreamInfo,
   channels : Array[Array[Int32]],
@@ -192,10 +192,14 @@ fn verify_md5(
     return
   }
   let bps = info.bits_per_sample
-  if bps % 8 != 0 || bps > 32 {
+  if bps > 32 {
     return
   }
-  let nbytes = bps / 8
+  // RFC 9639 §8.4：位深非整数字节时，每个样本符号扩展到下一个完整
+  // 字节数（ceil(bps/8)），小端存储、跨声道交织。Int32 的补码表示
+  // 已天然完成符号扩展，取低 nbytes 字节即可——8/16/24/32 位时
+  // ceil(bps/8)==bps/8，与既有验证过的行为完全一致。
+  let nbytes = (bps + 7) / 8
   let nch = channels.length()
   if nch == 0 {
     return
@@ -236,7 +240,7 @@ fn verify_md5(
 /// - 子帧或 CRC-16 失败直接报错，不跳帧，保证错误可见；
 /// - `STREAMINFO.total_samples` 非 0 时以此为准截断输出，且帧数不足会报
 ///   Truncated 而不是静默少样本；
-/// - STREAMINFO 记录了 MD5 时（且位深为 8 的倍数）校验解码 PCM 的 MD5。
+/// - STREAMINFO 记录了 MD5 时校验解码 PCM 的 MD5（4–32 位全支持）。
 pub fn decode(data : Bytes) -> FlacFile raise FlacError {
   let meta = parse_metadata(data)
   let info = meta.stream_info
