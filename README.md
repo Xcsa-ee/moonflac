@@ -87,23 +87,38 @@ let block = s.next() // Option：每声道一个块的样本
 
 ## 验证方法（可复现）
 
-仓库自带两级验证，任何一次改动都应跑全：
+仓库自带三级验证，任何一次改动都应跑全：
 
 ```bash
-# 1. 单元测试（白盒 29 用例，双后端）
+# 1. 单元测试（白盒 56 用例，双后端）
 moon test --target wasm-gc
 moon test --target js
 
-# 2. 差分测试：现场生成语料，与参考解码器逐样本比对
-#    本地需要 ffmpeg（可用 FLAC_FFMPEG=<路径> 指定），CI 使用 apt 安装的 ffmpeg
+# 2. 差分测试：现场生成语料，与 FFmpeg 逐样本比对
+#    本地需要 ffmpeg 与 libFLAC 的 flac（可用 FLAC_FFMPEG / FLAC_BIN 指定路径），
+#    CI 使用 apt 安装的 ffmpeg + flac
 python3 tools/gen_corpus.py
 python3 tools/diff_oracle.py --target wasm-gc
 python3 tools/diff_oracle.py --target js
+
+# 3. 兼容性验收报告：xiph 官方测试文件 + 自建语料，
+#    三方（本解码器 / FFmpeg / libFLAC）逐样本与 STREAMINFO MD5 比对
+python3 tools/compat_report.py \
+    --xiph <xiph/flac 仓库>/test/flac-to-flac-metadata-test-files \
+    --corpus tools/corpus --out COMPATIBILITY.md
 ```
+
+当前结果见 [COMPATIBILITY.md](./COMPATIBILITY.md)：88 个文件（xiph 官方 9 + 自建 79）
+全部与 FFmpeg 逐样本一致并通过 `flac -t` 的 MD5 校验；其中 82 个另通过 libFLAC
+裸 PCM 逐样本比对，其余 6 个（4/12/20 位）因 libFLAC 拒绝非 8 倍数位深的 raw
+输出而不做该项（已在报告中如实标注）。
 
 （库使用示例已于 2026-10-18 在全新工程 `moon add Xcsa-ee/moonflac` 实拉 0.1.0 复验通过：整流解码、WAV 写出与流式 seek/next 均按上文运行。）
 
-语料矩阵覆盖：8/16/24/32 bps、1/2/6 声道、四种声道分配、四种采样率码、全部子帧类型与预测阶、分区序扫描、LPC 精度 4/9/15、wasted bits、Rice 转义、Rice2、变长帧号与可变块长、多帧长流，以及魔数错误/空文件/中途截断/CRC-8 损坏/CRC-16 损坏五类负例（负例必须报错）。
+语料矩阵覆盖：4/8/12/16/20/24/32 bps（12/20 位为 libFLAC 真实编码，4 位无参考编码器、
+为手造帧）、1–8 声道、四种声道分配、四种采样率码、全部子帧类型与预测阶、分区序扫描、
+LPC 精度 4/9/15、wasted bits、Rice 转义、Rice2、变长帧号与可变块长、多帧长流，以及
+魔数错误/空文件/中途截断/CRC-8 损坏/CRC-16 损坏/MD5 篡改六类负例（负例必须报错）。
 
 关键判据做过变异验证：把 CRC-16 覆盖起点、mid/side 还原公式、rice unary 方向、wasted 左移、LPC 算术右移分别改错，单元测试相应变红。
 

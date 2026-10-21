@@ -165,9 +165,10 @@ pub fn parse_metadata(data : Bytes) -> ParsedMetadata raise FlacError {
         raise BadMetadata(reason="STREAMINFO 长度必须为 34")
       }
       info = Some(parse_streaminfo(data, p + 4))
-    } else if block_type >= 7 {
-      // 7..126 保留，127 非法：按规范拒绝而不是静默跳过
-      raise BadMetadata(reason="出现保留的元数据块类型")
+    } else if block_type == 127 {
+      // 127 是禁用值（避免与帧同步码混淆）；7..126 为保留值，真实文件
+      // （xiph 官方测试文件含 type 126）在用，按 libFLAC 的做法跳过继续
+      raise BadMetadata(reason="元数据块类型 127 为禁用值")
     } else {
       blocks.push({ block_type, offset: p + 4, length, })
     }

@@ -46,8 +46,8 @@ jobs:
         run: moon test --target js
 
       # ffmpeg 差分：本解码器与参考解码器逐样本比对（语料现场生成）
-      - name: 安装 ffmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: 安装 ffmpeg 与 libFLAC
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg flac
 
       - name: 生成差分语料
         run: python3 tools/gen_corpus.py
@@ -57,6 +57,17 @@ jobs:
 
       - name: 差分测试（js）
         run: python3 tools/diff_oracle.py --target js
+
+      # 兼容性验收：xiph 官方测试文件 + 自建语料，三方逐样本/MD5 比对
+      - name: 拉取 xiph 官方测试文件
+        run: |
+          git clone --depth 1 https://github.com/xiph/flac.git "$RUNNER_TEMP/xiph-flac"
+      - name: 兼容性报告（xiph 官方 + 自建语料）
+        run: |
+          python3 tools/compat_report.py \
+            --xiph "$RUNNER_TEMP/xiph-flac/test/flac-to-flac-metadata-test-files" \
+            --corpus tools/corpus --out COMPATIBILITY.ci.md
+          cat COMPATIBILITY.ci.md | head -20
 
       # 发布形态冒烟：加载 release wasm、走 base64 导出边界解码
       - name: WASM 导出冒烟

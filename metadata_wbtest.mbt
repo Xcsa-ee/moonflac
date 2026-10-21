@@ -45,18 +45,45 @@ test "非法输入全部落到错误" {
     FlacError::Truncated(..) => ()
     _ => abort("错误类型不对: 应为 Truncated")
   }
-  // 保留块类型 7
+  // 保留块类型 7：跳过但继续解析（xiph 官方测试文件含 type 126，
+  // libFLAC 同样跳过；RFC 9639 只把 127 列为禁止值）
   let w = TestBW::new()
   w.w(0x66, 8)
   w.w(0x4C, 8)
   w.w(0x61, 8)
   w.w(0x43, 8)
+  // STREAMINFO（先要有，type 0）
+  let si = tb_streaminfo(64, 44100, 1, 16, 0L, zeromd5())
+  w.w(0, 1)
+  w.w(0, 7)
+  w.w(34, 24)
+  for i in 0..<34 {
+    w.w(si.unsafe_get(i).to_int(), 8)
+  }
+  // type=7 保留块（last=1，载荷 0 字节）
   w.w(1, 1)
   w.w(7, 7)
-  w.w(0, 24) // last=1, type=7
+  w.w(0, 24)
+  let meta = parse_metadata(w.bytes())
+  @test.assert_eq(meta.frame_offset, 4 + 4 + 34 + 4)
+  // 127 是禁用值：必须拒绝
+  let w2 = TestBW::new()
+  w2.w(0x66, 8)
+  w2.w(0x4C, 8)
+  w2.w(0x61, 8)
+  w2.w(0x43, 8)
+  w2.w(0, 1)
+  w2.w(0, 7)
+  w2.w(34, 24)
+  for i in 0..<34 {
+    w2.w(si.unsafe_get(i).to_int(), 8)
+  }
+  w2.w(1, 1)
+  w2.w(127, 7)
+  w2.w(0, 24)
   try {
-    let _ = parse_metadata(w.bytes())
-    abort("应当 BadMetadata")
+    let _ = parse_metadata(w2.bytes())
+    abort("type 127 应当 BadMetadata")
   } catch {
     FlacError::BadMetadata(..) => ()
     _ => abort("错误类型不对: 应为 BadMetadata")
