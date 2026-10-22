@@ -126,6 +126,8 @@ LPC 精度 4/9/15、wasted bits、Rice 转义、Rice2、变长帧号与可变块
 
 按 2026-10-16 对 mooncakes.io 全量 3047 个模块的检索，`flac` 关键词唯一命中 `Milky2018/moon_rodio`，其 FLAC 路径是 `decoder/flac_vorbis_native.c` 中 `DR_FLAC_IMPLEMENTATION` 的 C FFI 封装，仅声明 native 目标；本库为纯 MoonBit 实现，无外部导入，可在 `wasm-gc` 下运行。
 
+2026-10-21 起生态新增 `Sakuraqwq1/moonaudio`（多格式音频工具箱，含 FLAC 解码）。两者定位不同：moonaudio 面向 DSP 流水线，输出归一化 `Double`、MD5 仅展示不校验、SEEKTABLE/CUESHEET/PICTURE 块只跳过不解析、无 seek 与增量输入；本库面向位精确解码与归档校验——整数 PCM/WAV 输出、4–32 位深 STREAMINFO MD5 校验、真实增量流式输入、SEEKTABLE seek 与全部元数据块内容解析。本库核心实现（0.1.0 于 2026-10-18 发布）早于 moonaudio 仓库创建（2026-10-21），为独立实现。
+
 ## 移植或参考说明
 
 本项目为**原创实现**，依据 [RFC 9639](https://www.rfc-editor.org/rfc/rfc9639.txt)（Free Lossless Audio Codec，2024-12）从零开发，未移植任何上游源文件。行为参考 [xiph/flac](https://github.com/xiph/flac)（libFLAC，库代码 BSD-3-Clause，见其 `COPYING.Xiph`）与 [mackron/dr_libs](https://github.com/mackron/dr_libs)（dr_flac，public domain / MIT-0），源码未并入本仓库。差分测试的参考解码器为 FFmpeg。
