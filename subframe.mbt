@@ -67,9 +67,12 @@ fn decode_subframe(
     }
     let precision_field = br.read_bits64(4).to_int()
     if precision_field == 15 {
-      // ffmpeg 对该值直接报 invalid coeff precision；其语义未在本环境验证，
-      // 不发布猜测实现（经验教训 L13）。
-      raise Unsupported(what="LPC 系数精度字段 15")
+      // RFC 9639 Table 22：系数精度字段 = (精度位数 - 1)，"0b1111 is forbidden"。
+      // 即字段 15 对应 16-bit 精度，规范不允许出现；读到它说明码流非法。
+      // 合法范围是字段 0..14 = 精度 1..15 bit，全部支持。
+      raise BadSubframe(
+        reason="LPC 系数精度字段 0b1111（RFC 9639 禁止值）",
+      )
     }
     let precision = precision_field + 1
     let shift = br.read_bits64(5).to_int()
