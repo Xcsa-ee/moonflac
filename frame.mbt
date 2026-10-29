@@ -172,8 +172,11 @@ fn parse_frame_header(
     block_size = br.read_bits64(16).to_int() + 1
   }
   br.check()
-  if block_size < 1 || block_size > 65536 {
-    raise BadFrameHeader(reason="块长超出合法范围")
+  // RFC 9639 §9.1.6：块长 65536（码 7 的字段值 65535）被规范禁止
+  // （"A value of 65535 ... is forbidden"），因为 STREAMINFO 的
+  // max_block_size 是 u(16)，最大只能表示 65535。合法上限是 65535。
+  if block_size < 1 || block_size > 65535 {
+    raise BadFrameHeader(reason="块长超出合法范围（1..65535）")
   }
   // 采样率扩展字段
   let mut sample_rate = if sr_code == 0 {

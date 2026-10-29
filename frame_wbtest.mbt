@@ -105,6 +105,24 @@ test "位深码 3（保留值）拒绝" {
 }
 
 ///|
+test "块长 65536 按 RFC 9639 §9.1.6 拒绝（上限 65535）" {
+  let info = parse_metadata(tb_flac_header(192, 44100, 1, 16, 0, false)).stream_info
+  // 块长码 7 + 16 位字段值 65535 → 块长 65536（规范禁止）
+  let bad = tb_frame_header(65536, 44100, 0, 16, 0, 16, 9)
+  try {
+    let _ = parse_frame_header(BitReader::new(bad), info)
+    abort("块长 65536 应当 BadFrameHeader")
+  } catch {
+    FlacError::BadFrameHeader(..) => ()
+    _ => abort("错误类型不对")
+  }
+  // 边界对照：65535 合法，必须能解析
+  let ok = tb_frame_header(65535, 44100, 0, 16, 0, 16, 9)
+  let h = parse_frame_header(BitReader::new(ok), info)
+  @test.assert_eq(h.block_size, 65535)
+}
+
+///|
 test "变长帧号：两字节 200 + 0xFF 拒绝" {
   let info = parse_metadata(tb_flac_header(192, 44100, 1, 16, 0, false)).stream_info
   let header = tb_frame_header(192, 44100, 0, 16, 200, 0, 9)
