@@ -139,7 +139,16 @@ LPC 精度 4/9/15、wasted bits、Rice 转义、Rice2、变长帧号与可变块
 
 ## 移植或参考说明
 
-本项目为**原创实现**，依据 [RFC 9639](https://www.rfc-editor.org/rfc/rfc9639.txt)（Free Lossless Audio Codec，2024-12）从零开发，未移植任何上游源文件。行为参考 [xiph/flac](https://github.com/xiph/flac)（libFLAC，库代码 BSD-3-Clause，见其 `COPYING.Xiph`）与 [mackron/dr_libs](https://github.com/mackron/dr_libs)（dr_flac，public domain / MIT-0），源码未并入本仓库。差分测试的参考解码器为 FFmpeg。
+本项目为**原创实现**，依据 [RFC 9639](https://www.rfc-editor.org/rfc/rfc9639.txt)（Free Lossless Audio Codec，2024-12）从零开发，**未移植任何上游源文件**——`git ls-files` 内没有一个 `.c`/`.h`/`.cpp`，也不链接 libFLAC。
+
+| 参考对象 | 上游许可 | 参考范围（用到什么） | 没用到什么 |
+|---|---|---|---|
+| [xiph/flac](https://github.com/xiph/flac)（libFLAC） | 库代码 BSD-3-Clause（其 `COPYING.Xiph`）；`flac`/`metaflac` 命令行工具为 GPLv2 | **行为对照**：错误分类与边界条件的取舍；以 `flac -t` 作为独立的第三方校验器（含 STREAMINFO MD5 全量校验） | 未取任何 C 源码，未链接其库，未复用其 API 或数据结构 |
+| [mackron/dr_libs](https://github.com/mackron/dr_libs)（dr_flac） | public domain / MIT-0 | **行为对照**：帧头损坏后的向后扫描重同步这类容错策略 | 未取源码，未移植其 API |
+| [FFmpeg](https://ffmpeg.org/) | LGPL/GPL（按构建选项） | **仅作差分测试 oracle**：解码为 f64le 裸流后逐样本比对，不在解码实现里起作用 | 不参与实现，不进仓库 |
+| [RFC 9639](https://www.rfc-editor.org/rfc/rfc9639.txt) | IETF 的 RFC 文本使用条款 | 格式定义与全部强制校验项的规范依据 | — |
+
+**测试素材的来源与许可**：`COMPATIBILITY.md` 中的 xiph 官方文件取自 `xiph/flac` 的 `test/flac-to-flac-metadata-test-files/`，CI **按 tag `1.5.0`（commit `1507800d`）现场 clone**，按其仓库自带 `COPYING.*` 使用，**不随本仓库再分发**；自建语料由 `tools/gen_corpus.py` 用 ffmpeg 与 libFLAC 现场生成，`tools/corpus/` 已被 `.gitignore` 排除。手写的 `hand_*.flac` 由仓库内脚本按 RFC 9639 构造，可用 `gen_corpus.py` 复现。
 
 本项目采用 [Apache-2.0](./LICENSE) 许可证。
 
