@@ -1,6 +1,6 @@
 # moonflac
 
-纯 MoonBit 实现的 FLAC 无损音频解码器：零 FFI、不依赖任何 C 库或系统编解码器，可编译到 `wasm-gc` / `js` / `native` 三后端。
+纯 MoonBit 实现的 FLAC 无损音频解码器：零 FFI、不依赖任何 C 库或系统编解码器，可编译到 `wasm-gc` / `js` / `native` 三后端（CI 验证 `wasm-gc` 与 `js`；`native` 需 MSVC/系统链接器，见「已知限制」）。
 
 ## 项目目标
 
@@ -11,8 +11,8 @@
 按 RFC 9639 交付以下解码能力，全部路径都有**与参考解码器逐样本比对**的自动化测试：
 
 - **元数据**：`fLaC` 魔数、STREAMINFO 全字段、元数据块链遍历（保留块类型按规范拒绝）；
-- **帧头**：帧同步、全部块长码（表码 + 8/16 位扩展）、全部采样率码（表码 + 12/13/14 扩展字段）、声道分配码、位深码（4–32 bps）、UTF-8 形变变长帧号/样本号（含可变块长）、CRC-8；
-- **子帧**：CONSTANT、VERBATIM、FIXED（阶 0–4）、LPC（阶 1–32，系数精度 1–15、移位 0–31）；
+- **帧头**：帧同步、全部块长码（表码 + 8/16 位扩展，块长上限 65535；65536 按 RFC 9639 §9.1.6 拒绝）、全部采样率码（表码 + 12/13/14 扩展字段）、声道分配码、位深码（4–32 bps）、UTF-8 形变变长帧号/样本号（含可变块长）、CRC-8；
+- **子帧**：CONSTANT、VERBATIM、FIXED（阶 0–4）、LPC（阶 1–32，系数精度 1–15、预测右移按 s(5) 解释即 -16..15，负值为左移）；
 - **残差**：熵编码方法 0/1（Rice 4 位参数 / Rice2 5 位参数）、任意分区序、分区参数与数据交错、**参数转义**（15/31 → 5 位原码位宽）、wasted bits；
 - **声道去相关**：left/side、right/side、mid/side（side 位宽恒为 bps+1，含 32 bps 下的 33 位）；
 - **容错**：帧头级损坏向后扫描重同步；子帧/CRC-16 损坏返回结构化错误（绝不 panic）；`total_samples` 已知时输出精确截断、不足报错；
@@ -42,6 +42,12 @@
   这不是"未实现的合法编码"，符合规范的编码器不会产出它
   （实测 ffmpeg 编码器精度上限为 15，写入字段 14）。
 - `FlacStream::seek` 在无 SEEKTABLE 时为线性推进（正确优先）；按帧号扫描的快速路径留作后续增量。
+- **`native` 后端未做端到端验证**：`moon check --target native` 通过（类型检查层面），但
+  `moon build --target native` 在 Windows 上需要 MSVC Build Tools（C++ 工具 + Windows SDK），
+  在 macOS/Linux 需要可用的系统 C 工具链；本项目 CI 只在 ubuntu 上跑 `wasm-gc` 与 `js` 两个后端，
+  native 的构建与测试以使用者本地环境为准。
+- **示例输入不在仓库内**：`tools/corpus/` 已被 `.gitignore` 排除，语料用
+  `python3 tools/gen_corpus.py` 现场生成（需 ffmpeg 与 libFLAC 的 `flac`），见「验证方法」。
 
 ## 安装
 
@@ -93,7 +99,7 @@ let block = s.next() // Option：每声道一个块的样本
 仓库自带三级验证，任何一次改动都应跑全：
 
 ```bash
-# 1. 单元测试（白盒 56 用例，双后端）
+# 1. 单元测试（白盒 63 用例，双后端）
 moon test --target wasm-gc
 moon test --target js
 
@@ -116,14 +122,14 @@ python3 tools/compat_report.py \
 裸 PCM 逐样本比对，其余 6 个（4/12/20 位）因 libFLAC 拒绝非 8 倍数位深的 raw
 输出而不做该项（已在报告中如实标注）。
 
-（库使用示例已于 2026-10-18 实拉 0.1.0、2026-10-21 实拉 0.2.0 在全新工程复验通过：整流解码、WAV 写出、流式 seek/next 与 `FlacFeeder` 增量输入均按上文运行。）
+（库使用示例已于 2026-10-18 实拉 0.1.0、2026-10-21 实拉 0.2.0 在全新工程复验通过：整流解码、WAV 写出、流式 seek/next 与 `FlacFeeder` 增量输入均按上文运行。2026-10-29 又在全新工程 `moon add Xcsa-ee/moonflac` 实拉 0.3.0 通过：`decode_flac_base64` 对合法 FLAC 返回非空 base64 WAV、对坏输入按契约返回空串，`wav_encode` 签名与上文一致；该次复验未覆盖流式接口。）
 
 语料矩阵覆盖：4/8/12/16/20/24/32 bps（12/20 位为 libFLAC 真实编码，4 位无参考编码器、
 为手造帧）、1–8 声道、四种声道分配、四种采样率码、全部子帧类型与预测阶、分区序扫描、
 LPC 精度 4/9/15、wasted bits、Rice 转义、Rice2、变长帧号与可变块长、多帧长流，以及
 魔数错误/空文件/中途截断/CRC-8 损坏/CRC-16 损坏/MD5 篡改六类负例（负例必须报错）。
 
-关键判据做过变异验证：把 CRC-16 覆盖起点、mid/side 还原公式、rice unary 方向、wasted 左移、LPC 算术右移分别改错，单元测试相应变红。
+关键判据做过**人工变异验证**（开发期逐项改错后跑单测确认变红，该过程未入库为脚本）：把 CRC-16 覆盖起点、mid/side 还原公式、rice unary 方向、wasted 左移、LPC 算术右移分别改错，单元测试相应变红。
 
 ## 生态定位
 
@@ -141,9 +147,13 @@ LPC 精度 4/9/15、wasted bits、Rice 转义、Rice2、变长帧号与可变块
 
 | 路径 | 内容 |
 |---|---|
-| `metadata.mbt` `frame.mbt` | 元数据与帧头解析 |
+| `metadata.mbt` `frame.mbt` | 元数据块链与帧头解析 |
+| `metadata_ext.mbt` | SEEKTABLE / VORBIS_COMMENT / CUESHEET / PICTURE / APPLICATION 内容解析 |
 | `subframe.mbt` `residual.mbt` | 子帧与分区 Rice 残差 |
 | `flac.mbt` | 顶层解码编排与声道去相关 |
-| `wav.mbt` | WAV 序列化 |
+| `bitreader.mbt` `crc.mbt` | 位级读取（含 UTF-8 形变变长帧号）与 CRC-8/16 |
+| `stream.mbt` `incremental.mbt` | `FlacStream` 逐块/seek 与 `FlacFeeder` 增量输入 |
+| `wasm_api.mbt` `wav.mbt` | base64 导入导出的 wasm 调用面与 WAV 序列化 |
+| `flac_error.mbt` | 结构化错误类型 |
 | `cmd/main` | 命令行示例 |
-| `tools/` | 差分测试工具链（语料生成 + 逐样本比对） |
+| `tools/` | 差分测试工具链（语料生成 + 逐样本比对 + 兼容性报告 + wasm 冒烟） |
