@@ -150,6 +150,8 @@ LPC 精度 4/9/15、wasted bits、Rice 转义、Rice2、变长帧号与可变块
 
 **测试素材的来源与许可**：`COMPATIBILITY.md` 中的 xiph 官方文件取自 `xiph/flac` 的 `test/flac-to-flac-metadata-test-files/`，CI **按 tag `1.5.0`（commit `1507800d`）现场 clone**，按其仓库自带 `COPYING.*` 使用，**不随本仓库再分发**；自建语料由 `tools/gen_corpus.py` 用 ffmpeg 与 libFLAC 现场生成，`tools/corpus/` 已被 `.gitignore` 排除。手写的 `hand_*.flac` 由仓库内脚本按 RFC 9639 构造，可用 `gen_corpus.py` 复现。
 
+对拍用的参考解码器版本需要在日志里能追溯：本地复跑用的是 libFLAC **1.5.0**；CI 的 `flac` 由 apt 提供（实测 **1.4.3**，ffmpeg 6.1.1），因此 CI 会打印 `ffmpeg -version` 与 `flac --version`，xiph 素材的 tag 与工具版本都不随上游漂移。
+
 本项目采用 [Apache-2.0](./LICENSE) 许可证。
 
 ## 目录结构

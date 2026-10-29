@@ -63,7 +63,8 @@ jobs:
         run: python3 tools/diff_oracle.py --target js
 
       # 兼容性验收：xiph 官方测试文件 + 自建语料，三方逐样本/MD5 比对
-      # pin 到 tag 1.5.0（commit 1507800d），与本地 libFLAC 1.5.0 对齐，避免素材漂到 master
+      # pin 到 tag 1.5.0（commit 1507800d）的测试素材，避免素材漂到 master；
+      # 注：CI 的 flac 由 apt 提供（实测 1.4.3），所以上面会打印 flac/ffmpeg 版本便于追溯
       - name: 拉取 xiph 官方测试文件（tag 1.5.0）
         run: |
           git clone --depth 1 --branch 1.5.0 https://github.com/xiph/flac.git "$RUNNER_TEMP/xiph-flac"
