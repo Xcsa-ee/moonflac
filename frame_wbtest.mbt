@@ -82,6 +82,29 @@ test "保留码与同步码拒绝" {
 }
 
 ///|
+test "位深码 3（保留值）拒绝" {
+  let info = parse_metadata(tb_flac_header(192, 44100, 1, 16, 0, false)).stream_info
+  // 块长码 1（192）、采样率码 9（44100）、声道 0、位深码 3（保留）
+  let w = TestBW::new()
+  w.w(0x3FFE, 14)
+  w.w(0, 1) // 保留位
+  w.w(0, 1) // 阻塞策略
+  w.w(1, 4) // 块长码 1
+  w.w(9, 4) // 采样率码 9
+  w.w(0, 4) // 声道分配 0（mono）
+  w.w(3, 3) // 位深码 3 = 保留值
+  w.w(0, 1) // 帧头末保留位
+  w.w(0, 8) // 帧号 0
+  try {
+    let _ = parse_frame_header(BitReader::new(w.bytes()), info)
+    abort("应当 BadFrameHeader")
+  } catch {
+    FlacError::BadFrameHeader(..) => ()
+    _ => abort("错误类型不对")
+  }
+}
+
+///|
 test "变长帧号：两字节 200 + 0xFF 拒绝" {
   let info = parse_metadata(tb_flac_header(192, 44100, 1, 16, 0, false)).stream_info
   let header = tb_frame_header(192, 44100, 0, 16, 200, 0, 9)

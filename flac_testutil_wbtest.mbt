@@ -388,13 +388,15 @@ fn tb_utf8(w : TestBW, number : Int32) -> Unit {
 
 ///|
 /// LPC 子帧（单分区 Rice，残差按给定精度系数现场计算）。
+/// `shift_field` 是 5 位字段值（0..31），按规范 s(5) 解释：
+/// >= 16 为负数（左移）。与 `reconstruct_lpc` 的语义一致。
 fn tb_sub_lpc(
   samples : Array[Int32],
   bps : Int32,
   order : Int32,
   precision : Int32,
   coeffs : Array[Int32],
-  shift : Int32,
+  shift_field : Int32,
 ) -> Bytes {
   let w = TestBW::new()
   w.w(0, 1)
@@ -405,19 +407,24 @@ fn tb_sub_lpc(
     w.w(samples[i] & mask, bps)
   }
   w.w(precision - 1, 4)
-  w.w(shift, 5)
+  w.w(shift_field, 5)
   let cmask = (1 << precision) - 1
   for c in coeffs {
     w.w(c & cmask, precision)
   }
   // 残差（与库端重建公式同源——这里验证的是布局，正确性由差分语料兜底）
+  let shift = if shift_field >= 16 { shift_field - 32 } else { shift_field }
   let res = []
   for i in order..<samples.length() {
     let mut acc = 0L
     for j in 0..<order {
       acc += Int64::from_int(coeffs[j]) * Int64::from_int(samples[i - 1 - j])
     }
-    let pred = (acc >> shift).to_int()
+    let pred = if shift >= 0 {
+      (acc >> shift).to_int()
+    } else {
+      (acc << -shift).to_int()
+    }
     res.push(Int64::from_int(samples[i] - pred))
   }
   w.w(0, 2)

@@ -75,7 +75,10 @@ fn decode_subframe(
       )
     }
     let precision = precision_field + 1
-    let shift = br.read_bits64(5).to_int()
+    // RFC 9639 Table 22：Prediction right shift 是 s(5)，范围 -16..15。
+    // 字段值为二补码：>= 16 表示负数（即预测左移）。
+    let shift_field = br.read_bits64(5).to_int()
+    let shift = if shift_field >= 16 { shift_field - 32 } else { shift_field }
     let coeffs = []
     for _ in 0..<order {
       coeffs.push(br.read_sample64(precision))

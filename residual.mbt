@@ -125,7 +125,8 @@ fn reconstruct_fixed(
 }
 
 ///|
-/// LPC 预测重建：`x[i] = r[i] + (Σ coeff[j] * x[i-1-j]) >> shift`（算术右移）。
+/// LPC 预测重建：`x[i] = r[i] + (Σ coeff[j] * x[i-1-j]) >> shift`。
+/// `shift` 已按规范解释为 s(5)：非负为算术右移，负值为左移。
 fn reconstruct_lpc(
   xs : Array[Int64],
   block_size : Int32,
@@ -139,7 +140,8 @@ fn reconstruct_lpc(
     for j in 0..<order {
       acc += coeffs[j] * xs[i - 1 - j]
     }
-    xs[i] = xs[i] + (acc >> shift)
+    let pred = if shift >= 0 { acc >> shift } else { acc << -shift }
+    xs[i] = xs[i] + pred
     i += 1
   }
 }
