@@ -6,7 +6,7 @@
    （rice 转义、采样率扩展码、可变块长、wasted bits 的部分形态等）。
 
 输出：tools/corpus/*.flac + tools/corpus/manifest.json（含 decode/negative 分类）。
-所有手造约定均先经 ffmpeg 解码器验证（见 tasks/moonflac-计划.md §2）。
+所有手造约定均先经 ffmpeg 解码器验证（逐样本比对见 tools/diff_oracle.py）。
 用法：python tools/gen_corpus.py [--ffmpeg <路径>]
 """
 

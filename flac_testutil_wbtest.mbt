@@ -1,8 +1,8 @@
 // flac_testutil_wbtest.mbt
 //
 // 测试基座：白盒测试包内共用的位写入器与帧/子帧构造器。
-// 构造器遵循的位层约定与 tools/gen_corpus.py 相同，全部经 ffmpeg 验证
-// （见 tasks/moonflac-计划.md §2），此处不依赖任何外部文件。
+// 构造器遵循的位层约定与 tools/gen_corpus.py 相同，全部经 ffmpeg 验证，
+// 此处不依赖任何外部文件。
 
 ///|
 /// 测试用 MSB-first 位写入器。

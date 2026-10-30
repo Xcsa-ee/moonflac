@@ -8,7 +8,8 @@
 
 ## 支持范围（已实现并经差分验证）
 
-按 RFC 9639 交付以下解码能力，全部路径都有**与参考解码器逐样本比对**的自动化测试：
+按 RFC 9639 交付以下解码能力。**下表列出的结构组合都有与参考解码器逐样本比对的自动化测试**
+（语料矩阵见「验证方法」）：
 
 - **元数据**：`fLaC` 魔数、STREAMINFO 全字段、元数据块链遍历（保留块类型按规范拒绝）；
 - **帧头**：帧同步、全部块长码（表码 + 8/16 位扩展，块长上限 65535；65536 按 RFC 9639 §9.1.6 拒绝）、全部采样率码（表码 + 12/13/14 扩展字段）、声道分配码、位深码（4–32 bps）、UTF-8 形变变长帧号/样本号（含可变块长）、CRC-8；
@@ -46,8 +47,9 @@
   `moon build --target native` 在 Windows 上需要 MSVC Build Tools（C++ 工具 + Windows SDK），
   在 macOS/Linux 需要可用的系统 C 工具链；本项目 CI 只在 ubuntu 上跑 `wasm-gc` 与 `js` 两个后端，
   native 的构建与测试以使用者本地环境为准。
-- **示例输入不在仓库内**：`tools/corpus/` 已被 `.gitignore` 排除，语料用
-  `python3 tools/gen_corpus.py` 现场生成（需 ffmpeg 与 libFLAC 的 `flac`），见「验证方法」。
+- **完整语料不在仓库内**：只随仓库带一个 9 KB 的最小样例 `examples/sample.flac`；
+  `tools/corpus/`（85 个文件，含 4–32 位深与 6 个负例）已被 `.gitignore` 排除，
+  用 `python3 tools/gen_corpus.py` 现场生成（需 ffmpeg 与 libFLAC 的 `flac`），见「验证方法」。
 
 ## 安装
 
@@ -59,8 +61,10 @@ moon add Xcsa-ee/moonflac
 
 ### 命令行（可运行示例）
 
+仓库自带一个 9 KB 的样例，clone 下来即可原样执行：
+
 ```bash
-moon run cmd/main -- input.flac output.wav
+moon run cmd/main -- examples/sample.flac output.wav
 ```
 
 成功时输出采样率、声道、位深与样本数并写入 WAV；失败时输出结构化错误：
@@ -70,6 +74,10 @@ moon run cmd/main -- input.flac output.wav
 已写入: output.wav
 解码失败: Xcsa-ee/moonflac.FlacError.BadCrc(kind="CRC-16", ...)
 ```
+
+`examples/sample.flac` 是 44.1 kHz / 16 bit / 单声道 / 2000 样本的正弦波，由
+`tools/gen_corpus.py` 用 ffmpeg 从合成 PCM 编码而来，可随时重新生成（见「验证方法」）；
+完整语料（85 个文件，含 4–32 位深与 6 个负例）不随仓库分发。
 
 ### 作为库使用
 
@@ -104,18 +112,22 @@ moon test --target wasm-gc
 moon test --target js
 
 # 2. 差分测试：现场生成语料，与 FFmpeg 逐样本比对
-#    本地需要 ffmpeg 与 libFLAC 的 flac（可用 FLAC_FFMPEG / FLAC_BIN 指定路径），
-#    CI 使用 apt 安装的 ffmpeg + flac
+#    本地需要 ffmpeg 与 libFLAC 的 flac（可用 FLAC_FFMPEG / FLAC_BIN 指定路径，
+#    gen_corpus.py 也接受 --ffmpeg <路径>）；CI 使用 apt 安装的 ffmpeg + flac
 python3 tools/gen_corpus.py
 python3 tools/diff_oracle.py --target wasm-gc
 python3 tools/diff_oracle.py --target js
 
 # 3. 兼容性验收报告：xiph 官方测试文件 + 自建语料，
 #    三方（本解码器 / FFmpeg / libFLAC）逐样本与 STREAMINFO MD5 比对
+git clone --depth 1 --branch 1.5.0 https://github.com/xiph/flac.git /tmp/xiph-flac
 python3 tools/compat_report.py \
-    --xiph <xiph/flac 仓库>/test/flac-to-flac-metadata-test-files \
+    --xiph /tmp/xiph-flac/test/flac-to-flac-metadata-test-files \
     --corpus tools/corpus --out COMPATIBILITY.md
 ```
+
+> **Windows 用户**：本机 `python3` 是 Microsoft Store 的占位符，把上面命令里的 `python3`
+> 换成 `python` 即可；其余命令与 Linux 相同（`git clone` 的目标路径换成任意空目录）。
 
 当前结果见 [COMPATIBILITY.md](./COMPATIBILITY.md)：88 个文件（xiph 官方 9 + 自建 79）
 全部与 FFmpeg 逐样本一致并通过 `flac -t` 的 MD5 校验；其中 82 个另通过 libFLAC
@@ -167,4 +179,7 @@ LPC 精度 4/9/15、wasted bits、Rice 转义、Rice2、变长帧号与可变块
 | `wasm_api.mbt` `wav.mbt` | base64 导入导出的 wasm 调用面与 WAV 序列化 |
 | `flac_error.mbt` | 结构化错误类型 |
 | `cmd/main` | 命令行示例 |
+| `examples/sample.flac` | 最小可运行样例（9 KB，44.1 kHz / 16 bit / 单声道 / 2000 样本） |
 | `tools/` | 差分测试工具链（语料生成 + 逐样本比对 + 兼容性报告 + wasm 冒烟） |
+| `DEVELOPMENT.md` | 开发回顾：架构决策、验证判据、参考边界、AI 参与说明 |
+| `CHANGELOG.md` | 变更记录（按版本） |
