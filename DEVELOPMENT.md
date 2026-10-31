@@ -63,8 +63,7 @@ Ogg 封装的 FLAC、重采样 / 混音 / 音频设备输出。这些属于"另�
 
 **边界**：AI 的输出不作为证据。仓库里每个对外数字都由 `moon test`、`tools/*.py` 或 CI 产生，
 可当场复现；依赖只有 `moonbitlang/x`；未并入任何上游源码（`git ls-files` 里没有 `.c/.h/.cpp`）。
-README 里曾有一处"变异验证"的说法因为没入库脚本而改写为"人工做过、未入库"——
-宁可把口径收小，也不留无法证伪的断言。
+变异验证已脚本化为 `tools/mutation_check.py`（6/6 必须全部被抓到），CI 与本地都能复跑。
 
 ## 6. 已知取舍
 
@@ -82,6 +81,7 @@ moon fmt --check
 moon check --target wasm-gc --deny-warn
 moon test --target wasm-gc      # 63 / 63
 moon test --target js           # 63 / 63
+python tools\mutation_check.py  # 6/6 变异被抓到
 moon run cmd/main -- examples/sample.flac output.wav
 python tools\diff_oracle.py --target wasm-gc
 ```

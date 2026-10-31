@@ -45,6 +45,10 @@ jobs:
       - name: 测试（js 后端）
         run: moon test --target js
 
+      # 变异验证：把关键判据逐个改错，断言单测变红（6/6 必须全部被抓到）
+      - name: 变异验证
+        run: python3 tools/mutation_check.py --target wasm-gc
+
       # ffmpeg 差分：本解码器与参考解码器逐样本比对（语料现场生成）
       - name: 安装 ffmpeg 与 libFLAC
         run: |

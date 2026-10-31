@@ -1,5 +1,7 @@
 # moonflac
 
+[![CI](https://github.com/Xcsa-ee/moonflac/actions/workflows/ci.yml/badge.svg)](https://github.com/Xcsa-ee/moonflac/actions/workflows/ci.yml)
+
 纯 MoonBit 实现的 FLAC 无损音频解码器：零 FFI、不依赖任何 C 库或系统编解码器，可编译到 `wasm-gc` / `js` / `native` 三后端（CI 验证 `wasm-gc` 与 `js`；`native` 需 MSVC/系统链接器，见「已知限制」）。
 
 ## 项目目标
@@ -107,9 +109,10 @@ let block = s.next() // Option：每声道一个块的样本
 仓库自带三级验证，任何一次改动都应跑全：
 
 ```bash
-# 1. 单元测试（白盒 63 用例，双后端）
+# 1. 单元测试（白盒 63 用例，双后端）+ 变异验证（6 判据改错必须变红）
 moon test --target wasm-gc
 moon test --target js
+python3 tools/mutation_check.py
 
 # 2. 差分测试：现场生成语料，与 FFmpeg 逐样本比对
 #    本地需要 ffmpeg 与 libFLAC 的 flac（可用 FLAC_FFMPEG / FLAC_BIN 指定路径，
@@ -141,7 +144,7 @@ python3 tools/compat_report.py \
 LPC 精度 4/9/15、wasted bits、Rice 转义、Rice2、变长帧号与可变块长、多帧长流，以及
 魔数错误/空文件/中途截断/CRC-8 损坏/CRC-16 损坏/MD5 篡改六类负例（负例必须报错）。
 
-关键判据做过**人工变异验证**（开发期逐项改错后跑单测确认变红，该过程未入库为脚本）：把 CRC-16 覆盖起点、mid/side 还原公式、rice unary 方向、wasted 左移、LPC 算术右移分别改错，单元测试相应变红。
+关键判据的**变异验证已脚本化**：`python3 tools/mutation_check.py` 会把 CRC-16 覆盖起点、mid/side 还原公式、Rice unary 方向、wasted bits 左移、LPC 预测右移、块长上限逐个改错，并断言单元测试变红。当前 **6/6 变异全部被抓到**（约 8 秒，CI 也会跑这一步；脚本自己复制仓库到临时目录，不动工作区）。
 
 ## 生态定位
 

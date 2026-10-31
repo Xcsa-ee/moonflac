@@ -10,6 +10,10 @@
 - README 补 Windows 说明（`python3` → `python`）与 xiph 测试集的完整 clone 命令（pin 到 tag 1.5.0）。
 - 清理三处指向仓库外文件（`tasks/…`）的悬空引用。
 - 新增 `DEVELOPMENT.md`（开发回顾：架构决策、验证判据、参考边界、AI 参与说明）。
+- **变异验证脚本化**：新增 `tools/mutation_check.py`，CRC-16 覆盖起点、mid/side 补最低位、
+  wasted bits 左移、LPC 预测右移 s(5)、Rice unary 方向、块长上限 6 个判据逐个改错并断言单测变红；
+  本机 6/6 全抓到（约 8 秒），CI 已加同名步骤。
+- README 顶部加 CI badge。
 
 ## [0.3.2] - 2026-10-29
 
