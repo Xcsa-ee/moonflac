@@ -1,0 +1,9 @@
+# 统一行尾：仓库内文本一律 LF，避免 Windows 贡献者混入 CRLF 噪音
+* text=auto eol=lf
+
+# 二进制/样本文件不转行尾
+*.flac binary
+*.zip binary
+*.png binary
+*.gif binary
+*.mp4 binary
