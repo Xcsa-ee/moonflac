@@ -152,6 +152,8 @@ LPC 精度 4/9/15、wasted bits、Rice 转义、Rice2、变长帧号与可变块
 
 2026-10-21 起生态新增 `Sakuraqwq1/moonaudio`（多格式音频工具箱，含 FLAC 解码）。两者定位不同：moonaudio 面向 DSP 流水线，输出归一化 `Double`、MD5 仅展示不校验、SEEKTABLE/CUESHEET/PICTURE 块只跳过不解析、无 seek 与增量输入；本库面向位精确解码与归档校验——整数 PCM/WAV 输出、4–32 位深 STREAMINFO MD5 校验、真实增量流式输入、SEEKTABLE seek 与全部元数据块内容解析。本库核心实现（0.1.0 于 2026-10-18 发布）早于 moonaudio 仓库创建（2026-10-21），为独立实现。
 
+截至 2026-10-31 另有两个纯 MoonBit 的 FLAC 相关包：`CXREN/flac`（解码器，2026-10 检索：无 seek/增量输入说明，定位为逐帧解码到交织 PCM）与 `Sakuraqwq1/moonflac-encoder`（编码器，方向与本库互补）。本库与二者无代码关系，差异化在**位精确解码 + 全位深 MD5 校验 + 增量输入 + SEEKTABLE seek + 元数据块内容解析 + 88 文件三方对拍**。检索命令：`moon search flac --limit 10`（本机 `moon 0.1.20261012`）。
+
 ## 移植或参考说明
 
 本项目为**原创实现**，依据 [RFC 9639](https://www.rfc-editor.org/rfc/rfc9639.txt)（Free Lossless Audio Codec，2024-12）从零开发，**未移植任何上游源文件**——`git ls-files` 内没有一个 `.c`/`.h`/`.cpp`，也不链接 libFLAC。
