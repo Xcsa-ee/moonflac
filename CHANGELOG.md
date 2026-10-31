@@ -3,6 +3,13 @@
 本文件记录已发布到 mooncakes 的版本；`[未发布]` 段落列出已在 `master` 上但尚未发版的内容。
 格式参考 Keep a Changelog；版本号遵循 `MAJOR.MINOR.PATCH`。
 
+## [0.3.4] - 2026-10-31
+
+### 文档
+- README 生态定位补 `CXREN/flac`（解码器）与 `Sakuraqwq1/moonflac-encoder`（编码器）的差异化声明，
+  检索口径 2026-10-31（`moon search flac --limit 10`）。
+- 无解码代码变更。
+
 ## [0.3.3] - 2026-10-31
 
 ### 文档与仓库
