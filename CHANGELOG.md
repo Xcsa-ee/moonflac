@@ -3,17 +3,24 @@
 本文件记录已发布到 mooncakes 的版本；`[未发布]` 段落列出已在 `master` 上但尚未发版的内容。
 格式参考 Keep a Changelog；版本号遵循 `MAJOR.MINOR.PATCH`。
 
-## [未发布]
+## [0.3.3] - 2026-10-31
 
+### 文档与仓库
 - 仓库内新增最小样例 `examples/sample.flac`（9 KB，44.1 kHz / 16 bit / 单声道 / 2000 样本），
   README 的 CLI 示例改为 clone 后即可原样执行。
 - README 补 Windows 说明（`python3` → `python`）与 xiph 测试集的完整 clone 命令（pin 到 tag 1.5.0）。
 - 清理三处指向仓库外文件（`tasks/…`）的悬空引用。
 - 新增 `DEVELOPMENT.md`（开发回顾：架构决策、验证判据、参考边界、AI 参与说明）。
+
+### 测试
 - **变异验证脚本化**：新增 `tools/mutation_check.py`，CRC-16 覆盖起点、mid/side 补最低位、
   wasted bits 左移、LPC 预测右移 s(5)、Rice unary 方向、块长上限 6 个判据逐个改错并断言单测变红；
   本机 6/6 全抓到（约 8 秒），CI 已加同名步骤。
 - README 顶部加 CI badge。
+
+### 其他
+- 新增 `.gitattributes`，统一 LF 行尾（`*.flac` 等二进制不转行尾）。
+- 无解码代码变更。
 
 ## [0.3.2] - 2026-10-29
 
