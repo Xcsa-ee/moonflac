@@ -108,12 +108,12 @@ test "seek：SEEKTABLE 跳帧（帧头损坏时只有走点表才能成功）" {
     tb_frame_header(64, 44100, 0, 16, 1, 0, 9),
     tb_sub_constant(22, 16),
   )
-  // 前缀长度：magic 4 + STREAMINFO 块 38 + SEEKTABLE 块（头 4 + 单点 18）= 64
-  let prefix = 4 + 38 + 4 + 18
-  // 单点：样本 64 -> 帧 1 的字节偏移
+  // 单点：样本 64 -> 帧 1 的字节偏移。
+  // RFC 9639 §8.5.1：偏移基准是「第一帧头」，不是文件起点——
+  // 所以这里只写 f0_bad.length()，不能加元数据区长度。
   let st2 = TestBW::new()
   tb_be64(st2, 64L)
-  tb_be64(st2, Int64::from_int(prefix + f0_bad.length()))
+  tb_be64(st2, Int64::from_int(f0_bad.length()))
   st2.w(64, 16)
   let header = tb_flac_blocks(64, 44100, 1, 16, 128L, zeromd5(), [
     (3, st2.bytes()),
@@ -154,6 +154,83 @@ test "seek：SEEKTABLE 跳帧（帧头损坏时只有走点表才能成功）" {
   @test.assert_eq(rest.length(), 58) // 128 - 70
   for v in rest {
     @test.assert_eq(v, 22) // 帧 1 的常数值
+  }
+}
+
+///|
+test "SEEKTABLE 偏移基准：必须相对第一帧头（RFC 9639 §8.5.1）" {
+  // 4 帧 × 64 样本，常量值 11/22/33/44；元数据区长度非零（见 SEEKTABLE 块）
+  let frames : Array[Bytes] = []
+  for k in 0..<4 {
+    let hdr = tb_frame_header(64, 44100, 0, 16, k, 0, 9)
+    frames.push(tb_pack_frame(hdr, tb_sub_constant(11 * (k + 1), 16)))
+  }
+  let first_len = frames[0].length()
+  // 正确基准：偏移 = 帧 0 的字节长度（相对第一帧头）
+  let st = TestBW::new()
+  tb_be64(st, 64L)
+  tb_be64(st, Int64::from_int(first_len))
+  st.w(64, 16)
+  let data = tb_flac(
+    tb_flac_blocks(64, 44100, 1, 16, 256L, zeromd5(), [(3, st.bytes())]),
+    frames,
+  )
+  let full = decode(data)
+  let s = FlacStream::new(data)
+  s.seek(70)
+  let rest : Array[Int32] = []
+  let mut more = true
+  while more {
+    match s.next() {
+      None => more = false
+      Some(b) =>
+        for v in b[0] {
+          rest.push(v)
+        }
+    }
+  }
+  @test.assert_eq(rest.length(), full.channels[0].length() - 70)
+  for i in 0..<rest.length() {
+    @test.assert_eq(rest[i], full.channels[0][70 + i])
+  }
+}
+
+///|
+test "SEEKTABLE 指向另一帧时必须回退线性，不静默返回错样本" {
+  // 最危险的错法：偏移本身合法、指向的是**真实帧头**，但不是声明的那个帧
+  // （这里声明样本 64 = 帧 1，偏移却指向帧 2）。若只校验"能解析出帧头"，
+  // 会静默返回帧 2 的样本；落地校验必须比对编号并回退线性。
+  let frames : Array[Bytes] = []
+  for k in 0..<4 {
+    let hdr = tb_frame_header(64, 44100, 0, 16, k, 0, 9)
+    frames.push(tb_pack_frame(hdr, tb_sub_constant(11 * (k + 1), 16)))
+  }
+  let first_len = frames[0].length()
+  let st = TestBW::new()
+  tb_be64(st, 64L) // 声称样本 64（帧 1）
+  tb_be64(st, Int64::from_int(2 * first_len)) // 实际指向帧 2
+  st.w(64, 16)
+  let data = tb_flac(
+    tb_flac_blocks(64, 44100, 1, 16, 256L, zeromd5(), [(3, st.bytes())]),
+    frames,
+  )
+  let full = decode(data)
+  let s = FlacStream::new(data)
+  s.seek(70)
+  let rest : Array[Int32] = []
+  let mut more = true
+  while more {
+    match s.next() {
+      None => more = false
+      Some(b) =>
+        for v in b[0] {
+          rest.push(v)
+        }
+    }
+  }
+  @test.assert_eq(rest.length(), full.channels[0].length() - 70)
+  for i in 0..<rest.length() {
+    @test.assert_eq(rest[i], full.channels[0][70 + i])
   }
 }
 

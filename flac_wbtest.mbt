@@ -81,6 +81,34 @@ test "total_samples 截断且不足报错" {
 }
 
 ///|
+test "采样率 20 位上限：768000 与 1048575 可解码" {
+  // RFC 9639 §3：采样率合法范围 1..1048575 Hz。
+  // 帧头以采样率码 0 回落到 STREAMINFO，因此大于 655350 的率也合法。
+  for rate in [655350, 655351, 768000, 1048575] {
+    let hdr = tb_frame_header(64, rate, 0, 16, 0, 0, 0) // sr_code 0 = STREAMINFO
+    let frames = [tb_pack_frame(hdr, tb_sub_constant(7, 16))]
+    let file = decode(
+      tb_flac(tb_flac_header(64, rate, 1, 16, 64L, false), frames),
+    )
+    @test.assert_eq(file.info.sample_rate, rate)
+    @test.assert_eq(file.channels[0].length(), 64)
+    @test.assert_eq(file.channels[0][0], 7)
+  }
+  // 0 仍非法（含音频时 MUST NOT 为 0）
+  let bad_hdr = tb_frame_header(64, 0, 0, 16, 0, 0, 0)
+  let bad = tb_flac(tb_flac_header(64, 0, 1, 16, 64L, false), [
+    tb_pack_frame(bad_hdr, tb_sub_constant(7, 16)),
+  ])
+  try {
+    let _ = decode(bad)
+    abort("采样率 0 应当被拒绝")
+  } catch {
+    FlacError::BadMetadata(..) => ()
+    _ => abort("错误类型不对")
+  }
+}
+
+///|
 test "尾部杂字节容忍（重同步）" {
   // 帧后追加 128 字节标签样杂数据：帧数已满不受影响
   let hdr = tb_frame_header(64, 44100, 0, 16, 0, 0, 9)

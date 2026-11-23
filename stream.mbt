@@ -119,6 +119,8 @@ pub fn FlacStream::seek(
     return
   }
   // —— SEEKTABLE：取样本号不大于 sample 的最后一个点 ——
+  // RFC 9639 §8.5.1：byte_offset 是「从第一帧头首字节到目标帧头首字节」的偏移，
+  // 不是从文件起点。因此落地位置 = frame_offset + byte_offset。
   let mut best_byte : Int64 = -1
   let mut best_sample : Int64 = -1
   for blk in self.blocks {
@@ -133,18 +135,29 @@ pub fn FlacStream::seek(
     }
   }
   if best_byte >= 0 {
-    let start_bit = (best_byte * 8).to_int()
+    let start_bit = ((Int64::from_int(self.frame_offset) + best_byte) * 8).to_int()
     self.br.truncated = false
     self.br.seek(start_bit)
-    // 试探：该偏移必须能解析出帧头，否则视为点表不可信，回退线性
-    let probe : FrameHeader? = {
+    // 落地校验：偏移处必须能解析出帧头，且帧头自带的编号必须与该定位点的
+    // sample_position 吻合（固定块流：帧号×块长；可变块流：样本号）。
+    // 任一不满足都说明点表不可信——回退线性推进，绝不静默返回错样本。
+    let landed : FrameHeader? = {
       let saved = self.br.pos
       let h = try_parse_header(self.br, self.info)
       self.br.truncated = false
       self.br.seek(saved)
       h
     }
-    if probe is Some(_) {
+    let verified = match landed {
+      None => false
+      Some(h) =>
+        if h.variable_blocksize {
+          h.coded_number == best_sample
+        } else {
+          h.coded_number * Int64::from_int(h.block_size) == best_sample
+        }
+    }
+    if verified {
       self.decoded = best_sample
     } else {
       self.rewind()

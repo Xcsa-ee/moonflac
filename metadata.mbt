@@ -16,7 +16,7 @@ pub struct StreamInfo {
   min_frame_size : Int32
   /// 最大帧长（字节），0 表示未知。
   max_frame_size : Int32
-  /// 采样率（Hz），1..655350。
+  /// 采样率（Hz），1..1048575（RFC 9639 §3：1 Hz 至 1048575 Hz）。
   sample_rate : Int32
   /// 声道数，1..8。
   channels : Int32
@@ -101,8 +101,11 @@ fn parse_streaminfo(data : Bytes, offset : Int32) -> StreamInfo raise FlacError 
     total = total |
       (Int64::from_int(data.unsafe_get(offset + i).to_int()) << ((17 - i) * 8))
   }
-  if sample_rate < 1 || sample_rate > 655350 {
-    raise BadMetadata(reason="采样率非法")
+  // 采样率是 u(20)：RFC 9639 §3 规定合法范围 1..1048575 Hz。
+  // 帧头的 uncommon sample rate 只能表达到 655350 Hz，但 STREAMINFO 可写
+  // 更大值（此时帧头用采样率码 0 回落到 STREAMINFO），不能因此拒绝。
+  if sample_rate < 1 || sample_rate > 1048575 {
+    raise BadMetadata(reason="采样率非法（合法范围 1..1048575 Hz）")
   }
   if bits_per_sample < 4 || bits_per_sample > 32 {
     raise BadMetadata(reason="位深非法（合法范围 4..32）")

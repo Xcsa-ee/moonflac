@@ -17,6 +17,10 @@ priv struct FrameHeader {
   bits_per_sample : Int32
   /// 帧起始字节偏移（CRC-16 覆盖范围的起点）。
   start_byte : Int32
+  /// 编码编号：固定块流为帧号、可变块流为帧首样本号（用于 seek 落地校验）。
+  coded_number : Int64
+  /// 阻塞策略：true = 可变块长（编号是样本号），false = 固定块长（编号是帧号）。
+  variable_blocksize : Bool
 }
 
 ///|
@@ -128,7 +132,7 @@ fn parse_frame_header(
   if reserved != 0 {
     raise BadFrameHeader(reason="帧头保留位非零")
   }
-  let _ = br.read_bit() // 阻塞策略位：M1 不做按样本号校验，读过即可
+  let variable_blocksize = br.read_bit() != 0
   br.check()
   let bs_code = br.read_bits64(4).to_int()
   br.check()
@@ -155,7 +159,7 @@ fn parse_frame_header(
   if last_reserved != 0 {
     raise BadFrameHeader(reason="帧头末保留位非零")
   }
-  let _ = read_coded_number(br) // 帧号/样本号：读过即校验其编码合法性
+  let coded_number = read_coded_number(br)
   // 块长扩展字段（跟在变长帧号之后）
   let mut block_size = if bs_code == 1 {
     192
@@ -230,5 +234,7 @@ fn parse_frame_header(
     channels,
     bits_per_sample,
     start_byte,
+    coded_number,
+    variable_blocksize,
   }
 }
