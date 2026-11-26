@@ -11,7 +11,7 @@ test "CONSTANT / VERBATIM 子帧" {
   let samples = [1, -2, 300, -32768, 32767, 0]
   let xs2 = tb_decode_subframe(tb_sub_verbatim(samples, 16), 6, 16)
   for i in 0..<6 {
-    @test.assert_eq(xs2[i], Int64::from_int(samples[i]))
+    @test.assert_eq(xs2[i], samples[i].to_int64())
   }
 }
 
@@ -29,7 +29,7 @@ test "FIXED 阶 0..4 + Rice 参数" {
     for param in [0, 4, 8, 14] {
       let xs = tb_decode_subframe(tb_sub_fixed(sig, 16, order, param, 0), 8, 16)
       for i in 0..<8 {
-        @test.assert_eq(xs[i], Int64::from_int(sig[i]))
+        @test.assert_eq(xs[i], sig[i].to_int64())
       }
     }
   }
@@ -40,7 +40,7 @@ test "rice 转义：原码 12 位" {
   let sig = [1000, 1100, 900, 1300, 800, 1400, 700, 1500] // 残差均在 12 位内
   let xs = tb_decode_subframe(tb_sub_fixed(sig, 16, 1, 15, 12), 8, 16)
   for i in 0..<8 {
-    @test.assert_eq(xs[i], Int64::from_int(sig[i]))
+    @test.assert_eq(xs[i], sig[i].to_int64())
   }
 }
 
@@ -49,8 +49,8 @@ test "wasted bits：k=1/2/3 × constant/verbatim" {
   for k in 1..<4 {
     let v = 24000 - 24000 % (1 << k)
     let xs = tb_decode_subframe(tb_sub_constant_wasted(v, 16, k), 16, 16)
-    @test.assert_eq(xs[0], Int64::from_int(v))
-    @test.assert_eq(xs[15], Int64::from_int(v))
+    @test.assert_eq(xs[0], v.to_int64())
+    @test.assert_eq(xs[15], v.to_int64())
   }
   // verbatim + wasted：整段左移还原
   let w = TestBW::new()
@@ -86,6 +86,6 @@ test "LPC 子帧：精度 5 系数现场重建" {
   let sig = [1000, 990, 979, 967, 954, 940, 925, 909]
   let xs = tb_decode_subframe(tb_sub_lpc(sig, 16, 2, 5, [2, -1], 1), 8, 16)
   for i in 0..<8 {
-    @test.assert_eq(xs[i], Int64::from_int(sig[i]))
+    @test.assert_eq(xs[i], sig[i].to_int64())
   }
 }

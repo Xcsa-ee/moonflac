@@ -63,7 +63,7 @@ fn BitReader::read_bits64(self : BitReader, n : Int32) -> Int64 {
   guard! n >= 0 && n <= 40
   let mut acc = 0L
   for _ in 0..<n {
-    acc = acc * 2 + Int64::from_int(self.read_bit())
+    acc = acc * 2 + self.read_bit().to_int64()
   }
   acc
 }
@@ -82,9 +82,9 @@ fn BitReader::read_sample64(self : BitReader, n : Int32) -> Int64 {
     return 0L
   }
   let v = self.read_bits64(n)
-  let limit = Int64::from_int(1) << (n - 1)
+  let limit = (1).to_int64() << (n - 1)
   if v >= limit {
-    v - (Int64::from_int(1) << n)
+    v - ((1).to_int64() << n)
   } else {
     v
   }

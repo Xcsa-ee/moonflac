@@ -113,7 +113,7 @@ test "seek：SEEKTABLE 跳帧（帧头损坏时只有走点表才能成功）" {
   // 所以这里只写 f0_bad.length()，不能加元数据区长度。
   let st2 = TestBW::new()
   tb_be64(st2, 64L)
-  tb_be64(st2, Int64::from_int(f0_bad.length()))
+  tb_be64(st2, f0_bad.length().to_int64())
   st2.w(64, 16)
   let header = tb_flac_blocks(64, 44100, 1, 16, 128L, zeromd5(), [
     (3, st2.bytes()),
@@ -169,7 +169,7 @@ test "SEEKTABLE 偏移基准：必须相对第一帧头（RFC 9639 §8.5.1）" {
   // 正确基准：偏移 = 帧 0 的字节长度（相对第一帧头）
   let st = TestBW::new()
   tb_be64(st, 64L)
-  tb_be64(st, Int64::from_int(first_len))
+  tb_be64(st, first_len.to_int64())
   st.w(64, 16)
   let data = tb_flac(
     tb_flac_blocks(64, 44100, 1, 16, 256L, zeromd5(), [(3, st.bytes())]),
@@ -208,7 +208,7 @@ test "SEEKTABLE 指向另一帧时必须回退线性，不静默返回错样本"
   let first_len = frames[0].length()
   let st = TestBW::new()
   tb_be64(st, 64L) // 声称样本 64（帧 1）
-  tb_be64(st, Int64::from_int(2 * first_len)) // 实际指向帧 2
+  tb_be64(st, (2 * first_len).to_int64()) // 实际指向帧 2
   st.w(64, 16)
   let data = tb_flac(
     tb_flac_blocks(64, 44100, 1, 16, 256L, zeromd5(), [(3, st.bytes())]),

@@ -11,7 +11,7 @@ test "LPC 预测右移 -1（左移 1 位）" {
   let sig = [100, 400, 1600, 6400]
   let xs = tb_decode_subframe(tb_sub_lpc(sig, 16, 1, 3, [2], 31), 4, 16)
   for i in 0..<4 {
-    @test.assert_eq(xs[i], Int64::from_int(sig[i]))
+    @test.assert_eq(xs[i], sig[i].to_int64())
   }
 }
 
@@ -21,7 +21,7 @@ test "LPC 预测右移 -16（左移 16 位）" {
   let sig = [1, 131072]
   let xs = tb_decode_subframe(tb_sub_lpc(sig, 16, 1, 3, [2], 16), 2, 16)
   for i in 0..<2 {
-    @test.assert_eq(xs[i], Int64::from_int(sig[i]))
+    @test.assert_eq(xs[i], sig[i].to_int64())
   }
 }
 
@@ -33,6 +33,6 @@ test "LPC 预测右移 15（正边界）" {
   // pred(x2) = (2*2) >> 15 = 0, 残差 0
   let xs = tb_decode_subframe(tb_sub_lpc(sig, 16, 1, 3, [2], 15), 4, 16)
   for i in 0..<4 {
-    @test.assert_eq(xs[i], Int64::from_int(sig[i]))
+    @test.assert_eq(xs[i], sig[i].to_int64())
   }
 }

@@ -35,7 +35,7 @@ test "LPC 精度字段 0..14（精度 1..15 bit）全部可解码" {
       16,
     )
     for i in 0..<4 {
-      @test.assert_eq(xs[i], Int64::from_int(sig[i]))
+      @test.assert_eq(xs[i], sig[i].to_int64())
     }
   }
 }

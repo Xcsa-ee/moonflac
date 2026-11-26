@@ -261,24 +261,22 @@ fn tb_sub_fixed(
   // 残差
   let res = []
   for i in order..<samples.length() {
-    let mut r = Int64::from_int(samples[i])
+    let mut r = samples[i].to_int64()
     if order == 1 {
-      r = r - Int64::from_int(samples[i - 1])
+      r = r - samples[i - 1].to_int64()
     } else if order == 2 {
-      r = r -
-        2L * Int64::from_int(samples[i - 1]) +
-        Int64::from_int(samples[i - 2])
+      r = r - 2L * samples[i - 1].to_int64() + samples[i - 2].to_int64()
     } else if order == 3 {
       r = r -
-        3L * Int64::from_int(samples[i - 1]) +
-        3L * Int64::from_int(samples[i - 2]) -
-        Int64::from_int(samples[i - 3])
+        3L * samples[i - 1].to_int64() +
+        3L * samples[i - 2].to_int64() -
+        samples[i - 3].to_int64()
     } else if order == 4 {
       r = r -
-        4L * Int64::from_int(samples[i - 1]) +
-        6L * Int64::from_int(samples[i - 2]) -
-        4L * Int64::from_int(samples[i - 3]) +
-        Int64::from_int(samples[i - 4])
+        4L * samples[i - 1].to_int64() +
+        6L * samples[i - 2].to_int64() -
+        4L * samples[i - 3].to_int64() +
+        samples[i - 4].to_int64()
     }
     res.push(r)
   }
@@ -289,7 +287,7 @@ fn tb_sub_fixed(
     w.w(15, 4)
     w.w(raw_bits, 5)
     for r in res {
-      w.w64(r & ((Int64::from_int(1) << raw_bits) - 1L), raw_bits)
+      w.w64(r & (((1).to_int64() << raw_bits) - 1L), raw_bits)
     }
   } else {
     w.w(param, 4)
@@ -301,7 +299,7 @@ fn tb_sub_fixed(
       }
       w.w(1, 1) // 终止 1
       if param > 0 {
-        w.w((z & ((Int64::from_int(1) << param) - 1L)).to_int(), param)
+        w.w((z & (((1).to_int64() << param) - 1L)).to_int(), param)
       }
     }
   }
@@ -418,14 +416,14 @@ fn tb_sub_lpc(
   for i in order..<samples.length() {
     let mut acc = 0L
     for j in 0..<order {
-      acc += Int64::from_int(coeffs[j]) * Int64::from_int(samples[i - 1 - j])
+      acc += coeffs[j].to_int64() * samples[i - 1 - j].to_int64()
     }
     let pred = if shift >= 0 {
       (acc >> shift).to_int()
     } else {
       (acc << -shift).to_int()
     }
-    res.push(Int64::from_int(samples[i] - pred))
+    res.push((samples[i] - pred).to_int64())
   }
   w.w(0, 2)
   w.w(0, 4)
@@ -505,7 +503,7 @@ fn tb_le32(w : TestBW, v : Int32) -> Unit {
 ///|
 /// 写大端 u32（PICTURE 等；要求 v < 2^31）。
 fn tb_be32(w : TestBW, v : Int32) -> Unit {
-  w.w64(Int64::from_int(v), 32)
+  w.w64(v.to_int64(), 32)
 }
 
 ///|

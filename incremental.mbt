@@ -175,11 +175,10 @@ pub fn FlacFeeder::next(
   self.compact()
   let samples = decorrelate(h, temp)
   // total_samples 已知时截断到总长（本帧是最后一帧才会触发）
-  let take64 = if total > 0 &&
-    self.decoded + Int64::from_int(h.block_size) > total {
+  let take64 = if total > 0 && self.decoded + h.block_size.to_int64() > total {
     total - self.decoded
   } else {
-    Int64::from_int(h.block_size)
+    h.block_size.to_int64()
   }
   let take = take64.to_int()
   let out : Array[Array[Int32]] = []

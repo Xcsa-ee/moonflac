@@ -86,13 +86,12 @@ pub fn read_seektable(
       if b0 >= 0x80 || b8 >= 0x80 {
         raise BadMetadata(reason="SEEKTABLE 64 位字段超出范围")
       }
-      let mut sample = Int64::from_int(b0)
-      let mut byte_off = Int64::from_int(b8)
+      let mut sample = b0.to_int64()
+      let mut byte_off = b8.to_int64()
       for i in 1..<8 {
-        sample = (sample << 8) |
-          Int64::from_int(data.unsafe_get(off + i).to_int())
+        sample = (sample << 8) | data.unsafe_get(off + i).to_int().to_int64()
         byte_off = (byte_off << 8) |
-          Int64::from_int(data.unsafe_get(off + 8 + i).to_int())
+          data.unsafe_get(off + 8 + i).to_int().to_int64()
       }
       let frame_samples = (data.unsafe_get(off + 16).to_int() << 8) |
         data.unsafe_get(off + 17).to_int()
@@ -328,9 +327,9 @@ fn read_be64(data : Bytes, offset : Int32) -> Int64 raise FlacError {
   if data.unsafe_get(offset).to_int() >= 0x80 {
     raise BadMetadata(reason="CUESHEET 64 位字段超出范围")
   }
-  let mut v = Int64::from_int(data.unsafe_get(offset).to_int())
+  let mut v = data.unsafe_get(offset).to_int().to_int64()
   for i in 1..<8 {
-    v = (v << 8) | Int64::from_int(data.unsafe_get(offset + i).to_int())
+    v = (v << 8) | data.unsafe_get(offset + i).to_int().to_int64()
   }
   v
 }

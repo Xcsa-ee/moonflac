@@ -78,10 +78,10 @@ pub fn FlacStream::next(
     }
     Some(b) => {
       let take64 = if total > 0 &&
-        self.decoded + Int64::from_int(b.block_size) > total {
+        self.decoded + b.block_size.to_int64() > total {
         total - self.decoded
       } else {
-        Int64::from_int(b.block_size)
+        b.block_size.to_int64()
       }
       let take = take64.to_int()
       let out : Array[Array[Int32]] = []
@@ -135,7 +135,7 @@ pub fn FlacStream::seek(
     }
   }
   if best_byte >= 0 {
-    let start_bit = ((Int64::from_int(self.frame_offset) + best_byte) * 8).to_int()
+    let start_bit = ((self.frame_offset.to_int64() + best_byte) * 8).to_int()
     self.br.truncated = false
     self.br.seek(start_bit)
     // 落地校验：偏移处必须能解析出帧头，且帧头自带的编号必须与该定位点的
@@ -154,7 +154,7 @@ pub fn FlacStream::seek(
         if h.variable_blocksize {
           h.coded_number == best_sample
         } else {
-          h.coded_number * Int64::from_int(h.block_size) == best_sample
+          h.coded_number * h.block_size.to_int64() == best_sample
         }
     }
     if verified {
@@ -171,13 +171,13 @@ pub fn FlacStream::seek(
     match decode_next_block(self.br, self.info) {
       None => self.eof = true
       Some(b) => {
-        let take64 = if total > 0 && cur + Int64::from_int(b.block_size) > total {
+        let take64 = if total > 0 && cur + b.block_size.to_int64() > total {
           total - cur
         } else {
-          Int64::from_int(b.block_size)
+          b.block_size.to_int64()
         }
         self.decoded = cur + take64
-        if sample < cur + Int64::from_int(b.block_size) {
+        if sample < cur + b.block_size.to_int64() {
           // 目标落在本块内
           let off = (sample - cur).to_int()
           let take = take64.to_int()

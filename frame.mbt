@@ -75,21 +75,21 @@ fn read_coded_number(br : BitReader) -> Int64 raise FlacError {
     mask = mask >> 1
   }
   if k == 0 {
-    return Int64::from_int(b0)
+    return b0.to_int64()
   }
   if k == 1 {
     // 10xxxxxx 是续字节形状，不能作为首字节
     raise BadFrameHeader(reason="变长帧号首字节非法")
   }
   // k 个前导 1 -> 共 k 字节；首字节数据位 8-k-1 个
-  let mut value = Int64::from_int(b0 & ((1 << (7 - k)) - 1))
+  let mut value = (b0 & ((1 << (7 - k)) - 1)).to_int64()
   for _ in 1..<k {
     let b = br.read_bits64(8).to_int()
     br.check()
     if (b & 0xC0) != 0x80 {
       raise BadFrameHeader(reason="变长帧号续字节非法")
     }
-    value = (value << 6) | Int64::from_int(b & 0x3F)
+    value = (value << 6) | (b & 0x3F).to_int64()
   }
   value
 }

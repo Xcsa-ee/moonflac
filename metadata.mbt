@@ -96,10 +96,10 @@ fn parse_streaminfo(data : Bytes, offset : Int32) -> StreamInfo raise FlacError 
   let sample_rate = (b0 << 12) | (b1 << 4) | (b2 >> 4)
   let channels = ((b2 >> 1) & 0x7) + 1
   let bits_per_sample = (((b2 & 0x1) << 4) | (b3 >> 4)) + 1
-  let mut total = Int64::from_int(b3 & 0x0F) << 32
+  let mut total = (b3 & 0x0F).to_int64() << 32
   for i in 14..<18 {
     total = total |
-      (Int64::from_int(data.unsafe_get(offset + i).to_int()) << ((17 - i) * 8))
+      (data.unsafe_get(offset + i).to_int().to_int64() << ((17 - i) * 8))
   }
   // 采样率是 u(20)：RFC 9639 §3 规定合法范围 1..1048575 Hz。
   // 帧头的 uncommon sample rate 只能表达到 655350 Hz，但 STREAMINFO 可写

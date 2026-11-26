@@ -261,11 +261,10 @@ pub fn decode(data : Bytes) -> FlacFile raise FlacError {
       None => eof = true
       Some(b) => {
         // total_samples 已知时截断到总长
-        let take64 = if total > 0 &&
-          decoded + Int64::from_int(b.block_size) > total {
+        let take64 = if total > 0 && decoded + b.block_size.to_int64() > total {
           total - decoded
         } else {
-          Int64::from_int(b.block_size)
+          b.block_size.to_int64()
         }
         let take = take64.to_int()
         for c in 0..<b.channels {
