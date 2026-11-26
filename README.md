@@ -13,7 +13,7 @@
 按 RFC 9639 交付以下解码能力。**下表列出的结构组合都有与参考解码器逐样本比对的自动化测试**
 （语料矩阵见「验证方法」）：
 
-- **元数据**：`fLaC` 魔数、STREAMINFO 全字段、元数据块链遍历（保留块类型按规范拒绝）；
+- **元数据**：`fLaC` 魔数、STREAMINFO 全字段、元数据块链遍历（保留类型 7–126 按规范跳过，127 为禁用值并拒绝）；
 - **帧头**：帧同步、全部块长码（表码 + 8/16 位扩展，块长上限 65535；65536 按 RFC 9639 §9.1.6 拒绝）、全部采样率码（表码 + 12/13/14 扩展字段）、声道分配码、位深码（4–32 bps）、UTF-8 形变变长帧号/样本号（含可变块长）、CRC-8；
 - **子帧**：CONSTANT、VERBATIM、FIXED（阶 0–4）、LPC（阶 1–32，系数精度 1–15、预测右移按 s(5) 解释即 -16..15，负值为左移）；
 - **残差**：熵编码方法 0/1（Rice 4 位参数 / Rice2 5 位参数）、任意分区序、分区参数与数据交错、**参数转义**（15/31 → 5 位原码位宽）、wasted bits；
@@ -45,6 +45,7 @@
   这不是"未实现的合法编码"，符合规范的编码器不会产出它
   （实测 ffmpeg 编码器精度上限为 15，写入字段 14）。
 - `FlacStream::seek` 在无 SEEKTABLE 时为线性推进（正确优先）；按帧号扫描的快速路径留作后续增量。
+- **非音频流（`sample_rate = 0`）不支持**：RFC 9639 §8.2 允许在“非音频数据”场景写 0，本库把它当作非法采样率拒绝（`BadMetadata`）。这是有意的范围界定：本库只面向含音频的 FLAC。
 - **`native` 后端未做端到端验证**：`moon check --target native` 通过（类型检查层面），但
   `moon build --target native` 在 Windows 上需要 MSVC Build Tools（C++ 工具 + Windows SDK），
   在 macOS/Linux 需要可用的系统 C 工具链；本项目 CI 只在 ubuntu 上跑 `wasm-gc` 与 `js` 两个后端，
@@ -152,7 +153,7 @@ LPC 精度 4/9/15、wasted bits、Rice 转义、Rice2、变长帧号与可变块
 
 2026-10-21 起生态新增 `Sakuraqwq1/moonaudio`（多格式音频工具箱，含 FLAC 解码）。两者定位不同：moonaudio 面向 DSP 流水线，输出归一化 `Double`、MD5 仅展示不校验、SEEKTABLE/CUESHEET/PICTURE 块只跳过不解析、无 seek 与增量输入；本库面向位精确解码与归档校验——整数 PCM/WAV 输出、4–32 位深 STREAMINFO MD5 校验、真实增量流式输入、SEEKTABLE seek 与全部元数据块内容解析。本库核心实现（0.1.0 于 2026-10-18 发布）早于 moonaudio 仓库创建（2026-10-21），为独立实现。
 
-截至 2026-10-31 另有两个纯 MoonBit 的 FLAC 相关包：`CXREN/flac`（解码器，2026-10 检索：无 seek/增量输入说明，定位为逐帧解码到交织 PCM）与 `Sakuraqwq1/moonflac-encoder`（编码器，方向与本库互补）。本库与二者无代码关系，差异化在**位精确解码 + 全位深 MD5 校验 + 增量输入 + SEEKTABLE seek + 元数据块内容解析 + 88 文件三方对拍**。检索命令：`moon search flac --limit 10`（本机 `moon 0.1.20261012`）。
+截至 2026-11-18，生态另有三个纯 MoonBit 的 FLAC 相关包：`CXREN/flac`（解码器，逐帧解码到交织 PCM，无 seek/增量输入说明）、`Sakuraqwq1/moonflac-encoder`（编码器，方向与本库互补）、`0717lee/moonflac`（同名包，描述为 native/JS/WASM GC 三后端的 FLAC 编解码，2026-11-18 发布）。本库与三者无代码关系，差异化在**位精确整数 PCM + 全位深 STREAMINFO MD5 校验 + 真实增量输入 + SEEKTABLE seek（含编号落地校验）+ 元数据块内容解析 + 88 文件三方对拍 + 6 组变异验证入 CI**。检索命令：`moon search flac --limit 20`（2026-11-24，本地 `moon 0.1.20261104`）。
 
 ## 移植或参考说明
 

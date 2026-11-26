@@ -64,3 +64,17 @@ test "seek 越界置 truncated，对齐判定" {
   br.seek(99)
   @test.assert_eq(br.truncated, true)
 }
+
+///|
+test "total_bits / remaining_bits：总长与剩余随读取递减" {
+  let br = BitReader::new(tb_bytes([0x01, 0x02, 0x03])) // 24 位
+  @test.assert_eq(br.total_bits(), 24)
+  @test.assert_eq(br.remaining_bits(), 24)
+  let _ = br.read_bits64(10)
+  @test.assert_eq(br.remaining_bits(), 14)
+  let _ = br.read_bits64(14)
+  @test.assert_eq(br.remaining_bits(), 0)
+  // seek 回退后剩余随之恢复
+  br.seek(4)
+  @test.assert_eq(br.remaining_bits(), 20)
+}
