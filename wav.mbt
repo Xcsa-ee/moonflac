@@ -40,11 +40,11 @@ pub fn wav_encode(
   let data_size = frames * block_align
   let buf = @buffer.Buffer()
   // RIFF 头
-  buf.write_bytes(b"RIFF")
+  buf.write_bytesview(b"RIFF"[:])
   buf.write_uint_le((36 + data_size).reinterpret_as_uint())
-  buf.write_bytes(b"WAVE")
+  buf.write_bytesview(b"WAVE"[:])
   // fmt chunk
-  buf.write_bytes(b"fmt ")
+  buf.write_bytesview(b"fmt "[:])
   buf.write_uint_le(16U)
   buf.write_uint16_le(1) // PCM
   buf.write_uint16_le(nch.to_uint16())
@@ -53,7 +53,7 @@ pub fn wav_encode(
   buf.write_uint16_le(block_align.to_uint16())
   buf.write_uint16_le(container.to_uint16())
   // data chunk
-  buf.write_bytes(b"data")
+  buf.write_bytesview(b"data"[:])
   buf.write_uint_le(data_size.reinterpret_as_uint())
   for f in 0..<frames {
     for c in 0..<nch {
